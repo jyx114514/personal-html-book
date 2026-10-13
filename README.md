@@ -19,14 +19,13 @@
 
 ## 环境与准备
 
-- Node.js ≥ 22。
-- pnpm 10；使用仓库中的 `pnpm-lock.yaml` 锁定依赖。
+- Node.js ≥ 22.13。
+- pnpm ≥ 10.26 且 < 11；项目通过 `packageManager` 固定为 10.26.0，`allowBuilds` 从该版本起受支持（[官方说明](https://github.com/pnpm/pnpm.io/blob/main/blog/releases/10.26.md)）。使用仓库中的 `pnpm-lock.yaml` 锁定依赖。
 - 浏览器验收另需 Microsoft Edge 和已有的 Playwright 安装；验收脚本不会安装依赖。
 
 ```bash
 pnpm install --frozen-lockfile
-pnpm run check
-node scripts/verify-computer-models.mjs
+pnpm run verify
 ```
 
 新克隆仓库不包含教材数据。构建教材前，先在本地准备或恢复：
@@ -79,12 +78,11 @@ pnpm run build:standalone my-topic --from-markdown
 ## 检查与本地网站构建
 
 ```bash
-# 类型检查和计算模型数值自检
-pnpm run check
-node scripts/verify-computer-models.mjs
+# 本地完整验收（无需教材数据）
+pnpm run verify
 
 # 导出回归：重复标题、资源检查、人工修订及末尾追加保留
-node --test scripts/standalone.test.mjs
+pnpm test
 
 # 准备好本地网站页面后，预览或构建 VitePress 网站
 pnpm run dev
@@ -95,9 +93,15 @@ pnpm run preview
 node scripts/verify-native-html.mjs <含-playwright-的目录>
 ```
 
-数值自检验证整型边界、float32 特例、ABI 布局、地址计算与栈恢复。浏览器验收覆盖断网 `file://` 打开、外部请求、关闭 JavaScript 阅读、目录与交互、窄屏及编辑后重新导出。浏览器脚本面向原有完整教材，包含正文长度与公式数量等要求；新主题需按其内容调整验收条件。
+数值自检验证整型边界、float32 特例、ABI 布局、地址计算与栈恢复。浏览器验收覆盖断网 `file://` 打开、外部请求、关闭 JavaScript 阅读、目录与交互、窄屏及编辑后重新导出。浏览器脚本逐一操作每个实验的滑块、下拉框、文本/数字输入和可用按钮。正文长度与公式数量的默认下限为 1 和 0，可在主题清单中设置 `"validation": { "minBodyLength": 5000, "minFormulas": 6 }`；不含实验的教材同样可验收。通用规则检查本地路径和私有材料链接；额外个人标识通过本地环境变量 `COURSE_PRIVATE_TERMS` 传入 JSON 字符串数组，不写入仓库。
 
-截图与结果写入 `internal/native-html-test/`。浏览器验收不读取旧备份，验证当前 HTML 的末尾追加及重新导出保留；类型检查或构建成功不能代替实际浏览器验收。
+截图与结果写入 `internal/native-html-test/`。浏览器验收将当前 HTML 及清单复制到隔离夹具，在副本上验证追加与重新导出，进程中断也不会改动权威文件。临时夹具正常结束时自动清理，截图与报告保留；类型检查或构建成功不能代替实际浏览器验收。
+
+`pnpm run verify` 依次运行 Vue/TypeScript 类型检查、构建脚本 ESLint 检查、计算模型自检和导出回归（含临时页面的网站构建）。全部通过才退出成功；提交前在本地运行即可，仓库保持仅提供本地制作、检查与构建，不启用 GitHub Actions。真实教材的浏览器验收需要已有 Edge 与 Playwright，单独执行。
+
+导出备份使用时间戳加随机后缀，避免同毫秒冲突；备份不会自动删除。可按保留需要定期人工归档 `internal/html-export-backups/`，确认恢复点后再删除旧副本。
+
+Git 忽略规则只约束当前与后续提交，不能撤回已公开的历史副本。历史清理需要私有备份和授权；本地重写完成不代表远端或他人克隆已同步清理。
 
 ## 本地交付
 

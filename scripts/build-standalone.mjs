@@ -1,4 +1,5 @@
-import { readFile, writeFile, mkdir, access, readdir, copyFile } from 'node:fs/promises'
+import { createRequire } from 'node:module'
+import { readFile, writeFile, mkdir, access, readdir, copyFile, mkdtemp } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { build } from 'vite'
@@ -52,10 +53,7 @@ const outputs = (Array.isArray(client) ? client : [client]).flatMap(result => re
 const chunks = outputs.filter(file => file.type === 'chunk')
 if (chunks.length !== 1 || outputs.some(file => file.type === 'asset' && !file.fileName.endsWith('.css'))) throw new Error('Unbundled resources')
 const js = chunks[0].code.replace(/<\/script/gi, '<\\/script')
-const outline = await readFile(path.join(root, 'docs/.vitepress/theme/components/CourseOutline.vue'), 'utf8')
-// Reuse existing shared outline rules verbatim without altering the theme.
-const outlineCss = outline.match(/<style scoped>([\s\S]*?)<\/style>/)[1]
-const css = outputs.filter(file => file.type === 'asset').map(file => file.source).join('\n') + '\n' + outlineCss
+const css = outputs.filter(file => file.type === 'asset').map(file => file.source).join('\n')
 
 let renderLab
 async function getLabRenderer() {
@@ -78,8 +76,14 @@ export async function renderLab(name, mode) { return renderToString(createSSRApp
   return renderLab
 }
 
+const parserRequire = createRequire(import.meta.resolve('vue/compiler-sfc'))
+const { parse: parseHtml } = parserRequire('@vue/compiler-dom')
+const modes = { OmicsLab: ['signal','tpm','methyl','hic','mass','flux'], ComputerLab: ['bits','float','address','layout','stack'], GradientDemo: [] }
 const escape = text => text.replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]))
-const plain = text => text.replace(/<[^>]+>/g, '').replace(/&ZeroWidthSpace;|\u200b/g, '').trim()
+const plain = text => {
+  const collect = node => node.type === 2 ? node.content : (node.children ?? []).map(collect).join('')
+  return collect(parseHtml(text, { parseMode: 'html' })).replace(/\u200b/g, '').trim()
+}
 let renderer
 async function importMarkdown(topic, manifest) {
   const source = path.join(root, 'content', topic)
@@ -109,22 +113,42 @@ async function importMarkdown(topic, manifest) {
   }
   // A single render gives the anchor plugin a book-wide slug namespace.
   let article = renderer.render(chapters.join('\n\n')).replace(/<style\b[^>]*>([\s\S]*?)<\/style>/gi, (_, style) => { mathStyles.push(style); return '' }) + '\n'
-  article = article.replace(/<CoursePanel title="([^"]*)">/g, '<section class="course-panel"><div class="course-panel__title">$1</div>')
-    .replace(/<\/CoursePanel>/g, '</section>').replace(/\s+v-pre=""/g, '')
-  const labs = Array.from(article.matchAll(/<(GradientDemo|OmicsLab|ComputerLab)(?: mode="([a-z]+)")?\s*\/>/g))
-  if (labs.length) {
-    const render = await getLabRenderer()
-    for (const [tag, name, mode] of labs) {
-      const html = await render(name, mode)
-      article = article.replace(tag, `<div data-course-component="${name}"${mode ? ` data-mode="${mode}"` : ''}>${html}</div>`)
+  const replacements = []
+  async function convert(node) {
+    if (node.type === 1 && ['CoursePanel', ...Object.keys(modes)].includes(node.tag)) {
+      const attrs = new Map(node.props.map(prop => {
+        if (prop.type !== 6) throw new Error('组件只支持静态属性：' + node.tag)
+        return [prop.name, prop.value?.content ?? '']
+      }))
+      const raw = node.loc.source
+      if (node.tag === 'CoursePanel') {
+        if (!attrs.has('title') || [...attrs.keys()].some(key => key !== 'title')) throw new Error('CoursePanel 需要静态 title 属性')
+        const openEnd = raw.match(/^<(?:[^>"']|"[^"]*"|'[^']*')*>/)?.[0].length
+        if (!openEnd || !raw.endsWith('</CoursePanel>')) throw new Error('CoursePanel 需要闭合标签')
+        replacements.push({ start: node.loc.start.offset, end: node.loc.start.offset + openEnd, text: '<section class="course-panel"><div class="course-panel__title">' + escape(attrs.get('title')) + '</div>' })
+        replacements.push({ start: node.loc.end.offset - '</CoursePanel>'.length, end: node.loc.end.offset, text: '</section>' })
+      } else {
+        const mode = attrs.get('mode')
+        if ([...attrs.keys()].some(key => key !== 'mode') || (modes[node.tag].length ? !modes[node.tag].includes(mode) : mode !== undefined)) throw new Error('Invalid mode for ' + node.tag + ': ' + String(mode))
+        if (node.children.length) throw new Error('实验组件不接受正文：' + node.tag)
+        const render = await getLabRenderer()
+        replacements.push({ start: node.loc.start.offset, end: node.loc.end.offset, text: '<div data-course-component="' + node.tag + '"' + (mode ? ' data-mode="' + mode + '"' : '') + '>' + await render(node.tag, mode) + '</div>' })
+      }
     }
+    for (const child of node.children ?? []) await convert(child)
   }
+  await convert(parseHtml(article, { parseMode: 'html' }))
+  for (const replacement of replacements.sort((a, b) => b.start - a.start)) article = article.slice(0, replacement.start) + replacement.text + article.slice(replacement.end)
+  article = article.replace(/\s+v-pre=""/g, '')
   if (/<\/?[A-Z][A-Za-z]*\b/.test(article)) throw new Error('Unconverted component in article')
-  const sourceNav = article.match(/<(nav|div) class="course-outline-source"[^>]*>([\s\S]*?)<\/\1>/)
+  const descendants = node => (node.children ?? []).flatMap(child => [child, ...descendants(child)])
+  const attribute = (node, name) => node.props?.find(prop => prop.type === 6 && prop.name === name)?.value?.content
+  const nodes = descendants(parseHtml(article, { parseMode: 'html' }))
+  const sourceNav = nodes.find(node => attribute(node, 'class')?.split(/\s+/).includes('course-outline-source'))
   const items = sourceNav
-    ? Array.from(sourceNav[2].matchAll(/<a href="(#[^"]+)"[^>]*>([\s\S]*?)<\/a>/g)).map(match => ({ href: match[1], title: plain(match[2]) }))
-    : Array.from(article.matchAll(/<h2 id="([^"]+)"[^>]*>([\s\S]*?)<\/h2>/g)).map(match => ({ href: `#${match[1]}`, title: plain(match[2]) }))
-  const nav = items.map(item => `          <li><a href="${item.href}">${item.title}</a></li>`).join('\n')
+    ? descendants(sourceNav).filter(node => node.tag === 'a' && attribute(node, 'href')?.startsWith('#')).map(node => ({ href: attribute(node, 'href'), title: plain(node.loc.source) }))
+    : nodes.filter(node => node.tag === 'h2' && attribute(node, 'id')).map(node => ({ href: '#' + attribute(node, 'id'), title: plain(node.loc.source) }))
+  const nav = items.map(item => `          <li><a href="${escape(item.href)}">${escape(item.title)}</a></li>`).join('\n')
   const body = `<main class="textbook course-shell">
   <aside class="course-outline" aria-label="教材目录">
     <div class="outline-heading">阅读目录</div>
@@ -147,20 +171,21 @@ for (const topic of topics) {
   const target = path.join(dist, manifest.output)
   let previous
   try { previous = await readFile(target, 'utf8') } catch (error) { if (error.code !== 'ENOENT') throw error }
-  const existingBody = previous?.match(/<!-- course:body:start -->\r?\n([\s\S]*?)\r?\n<!-- course:body:end -->/)
+  const existingBody = previous?.match(/<!-- course:body:start -->(?:\r?\n)?([\s\S]*?)(?:\r?\n)?<!-- course:body:end -->/)
+  if (previous && !existingBody) fail('正文保护标记缺失或不完整：' + manifest.output + '；请恢复 course:body:start/end 标记后重试。')
   let body, mathCss, title
   if (existingBody && !fromMarkdown) {
     body = existingBody[1]
     mathCss = previous.match(/<style id="course-math-styles">([\s\S]*?)<\/style>/)?.[1] ?? ''
     title = previous.match(/<title>([\s\S]*?)<\/title>/)?.[1] ?? escape(manifest.title)
   } else {
-    if (previous && !existingBody && /<article\b/i.test(previous.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ''))) throw new Error(`Unrecognized editable HTML: ${manifest.output}; refusing to overwrite`)
     ;({ body, mathCss } = await importMarkdown(topic, manifest))
     title = escape(manifest.title)
   }
   if (previous) {
-    const backup = path.join(root, 'internal', 'html-export-backups', new Date().toISOString().replace(/[:.]/g, '-'))
-    await mkdir(backup, { recursive: true })
+    const backupRoot = path.join(root, 'internal', 'html-export-backups')
+    await mkdir(backupRoot, { recursive: true })
+    const backup = await mkdtemp(path.join(backupRoot, new Date().toISOString().replace(/[:.]/g, '-') + '-'))
     await copyFile(target, path.join(backup, manifest.output))
   }
   const html = `<!DOCTYPE html>

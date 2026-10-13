@@ -1,4 +1,5 @@
 export function interpretBits(value: number, width = 8) {
+  if (!Number.isFinite(value) || !Number.isInteger(width) || width < 1 || width > 32) throw new RangeError('Expected finite value and integer width 1..32')
   const modulus = 2 ** width
   const unsigned = ((Math.trunc(value) % modulus) + modulus) % modulus
   return { unsigned, signed: unsigned >= modulus / 2 ? unsigned - modulus : unsigned,
@@ -18,6 +19,7 @@ export function decodeFloat32(text: string) {
 }
 export type Field = { name: string; size: number; align: number }
 export function layoutFields(fields: Field[]) {
+  if (fields.some(field => !Number.isSafeInteger(field.size) || field.size < 0 || !Number.isSafeInteger(field.align) || field.align <= 0)) throw new RangeError('Invalid field size or alignment')
   let end = 0
   const alignment = Math.max(1, ...fields.map(field => field.align))
   const rows = fields.map(field => {

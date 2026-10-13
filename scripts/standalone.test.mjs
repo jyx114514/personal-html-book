@@ -1,13 +1,14 @@
+import { createFixture } from './test-fixture.mjs'
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { cp, mkdir, mkdtemp, readFile, symlink, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, writeFile, readdir } from 'node:fs/promises'
 import { execFileSync } from 'node:child_process'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { assertStandaloneResources } from './standalone-validation.mjs'
 
 test('resource validation rejects external HTML/CSS resources regardless of quoting', () => {
   const external = [
+    '<form action=remote></form>', '<button formaction=remote>Send</button>', '<meta property=og:image content=remote>', '<img longdesc=remote>',
     `<img src='figure.png'>`, '<img SRC = figure.png>', '<img src="&#102;igure.png">',
     '<div style="background-image:url(figure.png)"></div>',
     `<style>p{background: url('figure.png')}</style>`,
@@ -29,22 +30,17 @@ test('resource validation rejects external HTML/CSS resources regardless of quot
     <script>const sample = '<img src="example.png">';</script>`)
 })
 
-test('real exporter assigns book-wide anchors and preserves human revisions and appended content', async () => {
-  const root = fileURLToPath(new URL('../', import.meta.url))
-  const internal = path.join(root, 'internal')
-  await mkdir(internal, { recursive: true })
-  // Keep fixtures in the ignored private directory; never rewrite delivered textbooks.
-  const fixture = await mkdtemp(path.join(internal, 'standalone-regression-'))
-  for (const entry of ['scripts', 'standalone', 'docs/.vitepress/theme', 'package.json']) {
-    await cp(path.join(root, entry), path.join(fixture, entry), { recursive: true })
-  }
-  await symlink(path.join(root, 'node_modules'), path.join(fixture, 'node_modules'), process.platform === 'win32' ? 'junction' : 'dir')
+test('real exporter assigns book-wide anchors and preserves human revisions and appended content', async t => {
+  const { fixture, cleanup } = await createFixture()
+  t.after(cleanup)
+  assert.throws(() => execFileSync(process.execPath, ['scripts/verify-native-html.mjs'], { cwd: fixture, stdio: 'pipe' }), error => /未找到 dist/.test(String(error.stderr)) && !/ENOENT/.test(String(error.stderr)))
+  assert.throws(() => execFileSync(process.execPath, ['scripts/build-standalone.mjs', '--all'], { cwd: fixture, stdio: 'pipe' }), error => /没有已有主题/.test(String(error.stderr)))
   const source = path.join(fixture, 'content', 'regression')
   await mkdir(source, { recursive: true })
   await writeFile(path.join(source, 'manifest.json'), JSON.stringify({ topic: 'regression', title: 'Regression', output: 'regression.html', chapters: ['one.md', 'two.md'] }))
   await writeFile(path.join(source, 'one.md'), '## Summary\n\nFirst chapter.\n\n$x^2$\n')
   await writeFile(path.join(source, 'two.md'), '## Summary\n\nSecond chapter.\n\n$x^3$\n')
-  const build = () => execFileSync(process.execPath, ['scripts/build-standalone.mjs', 'regression'], { cwd: fixture, stdio: 'pipe' })
+  const build = (...args) => execFileSync(process.execPath, ['scripts/build-standalone.mjs', ...(args.length ? args : ['regression'])], { cwd: fixture, stdio: 'pipe' })
   build()
   const target = path.join(fixture, 'dist', 'regression.html')
   const original = await readFile(target, 'utf8')
@@ -67,6 +63,48 @@ test('real exporter assigns book-wide anchors and preserves human revisions and 
   assert.equal(body(refreshed), body(appended), 'Resource refresh changed revised or appended body')
   const invalid = refreshed.replace('</article>', "<img src='missing.png'></article>")
   await writeFile(target, invalid)
-  assert.throws(build, error => /External resource reference/.test(String(error.stderr)))
+  assert.throws(() => build(), error => /External resource reference/.test(String(error.stderr)))
   assert.equal(await readFile(target, 'utf8'), invalid, 'Failed build overwrote the authoritative HTML')
+  await writeFile(target, refreshed.replace(/<!-- course:body:start -->\r?\n/, '<!-- course:body:start -->').replace(/\r?\n<!-- course:body:end -->/, '<!-- course:body:end -->'))
+  build('--all')
+  assert.match(await readFile(target, 'utf8'), /Human revision that must survive/)
+  const beforeImport = await readFile(target, 'utf8')
+  build('regression', '--from-markdown')
+  const backupRoot = path.join(fixture, 'internal/html-export-backups')
+  const saved = await Promise.all((await readdir(backupRoot)).filter(name => name !== 'legacy').map(name => readFile(path.join(backupRoot, name, 'regression.html'), 'utf8')))
+  assert.ok(saved.includes(beforeImport), 'Markdown reimport did not back up current HTML')
+  assert.match(await readFile(target, 'utf8'), /Stale source/)
+
+  assert.doesNotMatch(await readFile(target, 'utf8'), /Human revision that must survive/)
+  const beforeMalformed = await readFile(target, 'utf8')
+  const malformed = beforeMalformed.replace('<!-- course:body:end -->', '')
+  await writeFile(target, malformed)
+  assert.throws(() => build(), error => /正文保护标记/.test(String(error.stderr)))
+  assert.equal(await readFile(target, 'utf8'), malformed)
+  await writeFile(target, beforeMalformed)
+  const backups = await readdir(path.join(fixture, 'internal/html-export-backups'))
+  assert.ok(backups.length >= 4)
+  for (const [args, message] of [[['../escape'], /Invalid topic/], [['missing'], /manifest.json/], [['--unknown'], /Unknown option/]]) {
+    assert.throws(() => build(...args), error => message.test(String(error.stderr)))
+  }
+  for (const component of ['<OmicsLab />', '<ComputerLab mode="bad" />', '<ComputerLab mode="bits-typo" />']) {
+    await writeFile(path.join(source, 'one.md'), '## Mode validation\n\n' + component)
+    const before = await readFile(target, 'utf8')
+    assert.throws(() => build('regression', '--from-markdown'), error => /Invalid mode/.test(String(error.stderr)))
+    assert.equal(await readFile(target, 'utf8'), before)
+  }
+  await writeFile(path.join(source, 'one.md'), '## A & B < C\n\n<CoursePanel title="Say &quot;hello&quot; &amp; goodbye">\n\nPanel text.\n\n</CoursePanel>\n\n<OmicsLab mode="tpm" />\n\n<ComputerLab mode="bits" />\n\n<GradientDemo />')
+  build('regression', '--from-markdown')
+  const valid = await readFile(target, 'utf8')
+  assert.match(valid, /Say &quot;hello&quot; &amp; goodbye/)
+  assert.match(valid, /data-course-component="OmicsLab"/)
+  assert.match(valid, /A &amp; B &lt; C/)
+  assert.doesNotMatch(valid, /A &amp;amp;/)
+  // Build site mode from synthetic data; no private textbook is needed.
+  await writeFile(path.join(fixture, 'docs/index.md'), '# Verification\n\n<OmicsLab mode="tpm" />\n\n<ComputerLab mode="bits" />\n\n<GradientDemo />')
+  execFileSync(process.execPath, ['scripts/build-site.mjs'], { cwd: fixture, stdio: 'pipe' })
+  const site = await readFile(path.join(fixture, 'docs/.vitepress/dist/index.html'), 'utf8')
+  assert.match(site, /Counts 与 TPM/)
+  assert.match(site, /同一组位，两种整数解释/)
+
 })

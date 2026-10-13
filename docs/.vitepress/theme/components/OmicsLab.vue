@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 const props = defineProps<{ mode: 'signal' | 'tpm' | 'methyl' | 'hic' | 'mass' | 'flux' }>()
+if (!["signal","tpm","methyl","hic","mass","flux"].includes(props.mode)) throw new Error('Invalid mode for OmicsLab: ' + String(props.mode))
 const titles = { signal: '同一段基因组，不同的测量对象', tpm: 'Counts 与 TPM：长度和组成的影响', methyl: '甲基化比例与覆盖度', hic: '识别接触矩阵中的图案', mass: '电荷态如何改变 m/z', flux: '同一个代谢池，不同的周转速度' }
 const assay = ref('rna')
 const shortCount = ref(100), longCount = ref(200), thirdCount = ref(0)

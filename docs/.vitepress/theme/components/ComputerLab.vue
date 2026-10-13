@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 import { interpretBits, decodeFloat32, layoutFields, addressOf, stackTrace } from './computerModels'
 const props = defineProps<{ mode: 'bits' | 'float' | 'address' | 'layout' | 'stack' }>()
+if (!["bits","float","address","layout","stack"].includes(props.mode)) throw new Error('Invalid mode for ComputerLab: ' + String(props.mode))
 const titles = { bits: '同一组位，两种整数解释', float: '拆开一个 IEEE 754 binary32', address: '把下标翻译成字节地址', layout: '字段顺序、ABI 与 padding', stack: '单步观察嵌套调用的栈' }
 const value = ref(255), addend = ref(1), floatText = ref('0.1')
 const kind = ref('array'), abi = ref('lp64'), index = ref(2), row = ref(1), col = ref(2)

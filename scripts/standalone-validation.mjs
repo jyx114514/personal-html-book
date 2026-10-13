@@ -52,6 +52,8 @@ export function assertStandaloneResources(html) {
       if (tag === 'meta' && attrs.get('http-equiv')?.toLowerCase() === 'refresh') {
         throw new Error('External resource reference: meta refresh is not supported')
       }
+      if (tag === 'meta' && /^(?:og:(?:image|video|audio)(?::url|:secure_url)?|twitter:(?:image|player))$/i.test(attrs.get('property') ?? attrs.get('name') ?? '')) assertInline(attrs.get('content') ?? '', 'meta[content]')
+      // cite is a bibliographic link, not an automatically loaded resource.
       for (const [name, value] of attrs) {
         if (name === 'style') checkCss(`element { ${value} }`, `${tag}[style]`)
         else if (name === 'srcset' || name === 'imagesrcset') {
@@ -65,7 +67,7 @@ export function assertStandaloneResources(html) {
             rest = rest.slice(url.length)
             if (!url.endsWith(',')) rest = rest.replace(/^[^,]*(?:,|$)/, '')
           }
-        } else if (name === 'src' || name === 'poster' || name === 'background' ||
+        } else if (name === 'action' || name === 'formaction' || name === 'longdesc' || name === 'src' || name === 'poster' || name === 'background' ||
           ((name === 'href' || name === 'xlink:href') && !['a', 'area'].includes(tag))) {
           assertInline(value, `${tag}[${name}]`)
         }

@@ -9,6 +9,7 @@ const hasBackprop = hasPage('chapters/backprop')
 
 export default defineConfig({
   lang:'zh-CN', title:'我的交互式教材', description:'生物信息学与计算机科学学习笔记',
+  // 本地预览默认根路径；子路径构建可显式设置 SITE_BASE=/books/。
   base: process.env.SITE_BASE || '/', cleanUrls:true,
   markdown:{math:true,lineNumbers:true},
   themeConfig:{

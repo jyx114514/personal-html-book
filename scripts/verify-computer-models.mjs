@@ -36,3 +36,7 @@ assert.equal(stackTrace[3].rsp%16,0)
 assert.equal(stackTrace[4].rsp,stackTrace[3].rsp-8)
 assert.equal(stackTrace[5].rsp,stackTrace[3].rsp)
 console.log('PASS: integer boundaries, float32 edge cases, both ABI layouts, address calculations and stack restoration')
+
+assert.throws(() => interpretBits(NaN), RangeError)
+assert.throws(() => interpretBits(1, 0), RangeError)
+assert.throws(() => layoutFields([{ name: 'invalid', size: 1, align: 0 }]), RangeError)
