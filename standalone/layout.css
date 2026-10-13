@@ -1,0 +1,11 @@
+/* Reusable standalone document layout; course appearance comes from the shared theme. */
+#app { width: 100%; }
+.course-shell { padding-left: 256px; }
+.course-body { max-width: 850px; margin: 0 auto; padding: 64px var(--course-space) 80px; }
+.course-outline-source { display: none; }
+.course-body :is(h2[id], span[id]) { scroll-margin-top: 80px; }
+.course-table-scroll { max-width: 100%; overflow-x: auto; margin: 20px 0; }
+.course-table-scroll:focus-visible { outline: 2px solid var(--vp-c-brand-1); outline-offset: 2px; }
+.course-table-scroll table { margin: 0; }
+@media (max-width: 800px) { .course-shell { padding-left: 0; } .course-body { padding-top: 32px; } }
+@media print { .course-shell { padding-left: 0; } .course-body { max-width: none; padding: 0; } details { break-inside: avoid; } }

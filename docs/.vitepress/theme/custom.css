@@ -1,0 +1,14 @@
+/* Design tokens: only this file controls site appearance. */
+:root { --vp-c-brand-1:#2563eb; --vp-c-brand-2:#1d4ed8; --vp-c-brand-3:#1e40af; --vp-font-family-base: Inter, "Noto Sans SC", "Microsoft YaHei", sans-serif; --course-radius:12px; --course-space:24px; }
+.dark { --vp-c-brand-1:#93c5fd; --vp-c-brand-2:#60a5fa; --vp-c-brand-3:#3b82f6; }
+.vp-doc { font-size:16px; line-height:1.85; }
+.vp-doc h1 { font-size:2.1rem; font-weight:750; letter-spacing:-.02em; }
+.vp-doc h2 { margin-top:2.8rem; border-top:1px solid var(--vp-c-divider); padding-top:1.4rem; }
+.vp-doc h3 { margin-top:1.8rem; }
+.vp-doc p { margin: 1rem 0; }
+.vp-doc img { border-radius:var(--course-radius); }
+.vp-doc table { display:table; width:100%; }
+.vp-doc blockquote { border-left:3px solid var(--vp-c-brand-1); }
+.course-panel { padding:var(--course-space); border:1px solid var(--vp-c-divider); border-radius:var(--course-radius); background:var(--vp-c-bg-soft); margin:1.4rem 0; }
+.course-panel__title { font-weight:700; margin-bottom:8px; }
+.course-note { padding:14px 18px; border-left:3px solid var(--vp-c-brand-1); background:var(--vp-c-bg-soft); border-radius:0 8px 8px 0; margin:18px 0; }

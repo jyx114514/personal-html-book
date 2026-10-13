@@ -1,0 +1,8 @@
+{
+  "compilerOptions": {
+    "target": "ES2022", "module": "ESNext", "moduleResolution": "Bundler", "strict": true,
+    "skipLibCheck": true, "jsx": "preserve", "lib": ["ES2022", "DOM"],
+    "types": ["vitepress/client", "node"]
+  },
+  "include": ["docs/.vitepress/theme/**/*.ts", "docs/.vitepress/theme/**/*.vue", "docs/.vitepress/config.mts", "standalone/**/*.ts"]
+}

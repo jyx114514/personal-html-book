@@ -1,0 +1,11 @@
+node_modules/
+docs/.vitepress/cache/
+docs/.vitepress/dist/
+.DS_Store
+
+# Private inputs and editorial review (not for public repository)
+sources/*
+!sources/.gitkeep
+internal/
+.standalone/
+dist/
