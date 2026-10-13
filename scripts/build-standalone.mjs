@@ -4,6 +4,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { build } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { createMarkdownRenderer } from 'vitepress'
+import { assertStandaloneResources } from './standalone-validation.mjs'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const generated = path.join(root, '.standalone')
@@ -98,14 +99,16 @@ async function importMarkdown(topic, manifest) {
       }
     }
   }
-  let article = ''
+  const chapters = []
   const mathStyles = []
   for (const chapter of manifest.chapters) {
     const target = path.resolve(source, chapter)
     if (!target.startsWith(source + path.sep) || !target.endsWith('.md')) throw new Error('Invalid chapter path')
     await access(target)
-    article += renderer.render(await readFile(target, 'utf8')).replace(/<style\b[^>]*>([\s\S]*?)<\/style>/gi, (_, style) => { mathStyles.push(style); return '' }) + '\n'
+    chapters.push(await readFile(target, 'utf8'))
   }
+  // A single render gives the anchor plugin a book-wide slug namespace.
+  let article = renderer.render(chapters.join('\n\n')).replace(/<style\b[^>]*>([\s\S]*?)<\/style>/gi, (_, style) => { mathStyles.push(style); return '' }) + '\n'
   article = article.replace(/<CoursePanel title="([^"]*)">/g, '<section class="course-panel"><div class="course-panel__title">$1</div>')
     .replace(/<\/CoursePanel>/g, '</section>').replace(/\s+v-pre=""/g, '')
   const labs = Array.from(article.matchAll(/<(GradientDemo|OmicsLab|ComputerLab)(?: mode="([a-z]+)")?\s*\/>/g))
@@ -179,7 +182,7 @@ ${body}
 </body>
 </html>
 `
-  if (/<(?:script|link)\b[^>]*(?:src|href)=/i.test(html) || /(?:src|poster)="(?!data:)[^"]+"/i.test(body) || /url\(\s*["']?(?!data:|#)[^\s)"']+/i.test(css + mathCss)) throw new Error('External resource reference')
+  assertStandaloneResources(html)
   await writeFile(target, html)
   console.log(`Built dist/${manifest.output} (${Buffer.byteLength(html)} bytes; ${existingBody && !fromMarkdown ? 'preserved editable HTML body' : 'imported Markdown to native HTML'})`)
 }

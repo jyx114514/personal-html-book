@@ -72,12 +72,19 @@ pnpm run build:standalone my-topic --from-markdown
 
 修改公式的 `data-tex` 后，需要同步更新静态 SVG/MathML；仅修改 TeX 不会自动刷新公式显示。
 
+人工修订后的 HTML 继续作为唯一权威版本。后续追加时，读取当前文件，只在现有 `<article>` 的末尾、`</article>` 之前插入新内容；已有正文及人工修订保持原样，不重新排版或从旧 Markdown 重建。新增锚点避开所有已有 ID，目录仅追加新项目。除非明确要求修改既有内容，否则不改前面的章节。历史备份仅用于溯源，验收以当前 HTML 为基准，不要求与旧备份全文相同。
+
+首次从 Markdown 导入多个章节时，统一生成唯一标题锚点。资源校验解析 HTML 属性和 CSS，拒绝未内嵌的图片、样式及其他资源；普通参考文献链接可以保留。外部图片须先转换为 data URL，校验不会自动下载资源。
+
 ## 检查与本地网站构建
 
 ```bash
 # 类型检查和计算模型数值自检
 pnpm run check
 node scripts/verify-computer-models.mjs
+
+# 导出回归：重复标题、资源检查、人工修订及末尾追加保留
+node --test scripts/standalone.test.mjs
 
 # 准备好本地网站页面后，预览或构建 VitePress 网站
 pnpm run dev
@@ -90,7 +97,7 @@ node scripts/verify-native-html.mjs <含-playwright-的目录>
 
 数值自检验证整型边界、float32 特例、ABI 布局、地址计算与栈恢复。浏览器验收覆盖断网 `file://` 打开、外部请求、关闭 JavaScript 阅读、目录与交互、窄屏及编辑后重新导出。浏览器脚本面向原有完整教材，包含正文长度与公式数量等要求；新主题需按其内容调整验收条件。
 
-首次运行浏览器验收前，创建 `internal/html-export-backups/` 目录。截图与结果写入 `internal/native-html-test/`。类型检查或构建成功不能代替实际浏览器验收。
+截图与结果写入 `internal/native-html-test/`。浏览器验收不读取旧备份，验证当前 HTML 的末尾追加及重新导出保留；类型检查或构建成功不能代替实际浏览器验收。
 
 ## 本地交付
 
