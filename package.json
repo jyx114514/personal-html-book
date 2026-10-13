@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vitepress dev docs --host 127.0.0.1",
-    "build": "vitepress build docs",
+    "build": "node scripts/build-site.mjs",
     "preview": "vitepress preview docs --host 127.0.0.1",
     "check": "vue-tsc --noEmit -p tsconfig.json",
     "build:standalone": "node scripts/build-standalone.mjs"

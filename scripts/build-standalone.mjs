@@ -9,15 +9,35 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const generated = path.join(root, '.standalone')
 const dist = path.join(root, 'dist')
 const args = process.argv.slice(2)
+// pnpm may forward the separator used in older command examples.
+if (args[0] === '--') args.shift()
+function fail(message) {
+  console.error(`独立 HTML 构建失败：${message}`)
+  process.exit(1)
+}
 const fromMarkdown = args.includes('--from-markdown')
-if (args.some(arg => arg.startsWith('--') && !['--all', '--from-markdown'].includes(arg))) throw new Error('Unknown option')
+const unknown = args.find(arg => arg.startsWith('--') && !['--all', '--from-markdown'].includes(arg))
+if (unknown) fail(`Unknown option: ${unknown}。用法：pnpm run build:standalone <topic> [--from-markdown] 或 pnpm run build:standalone --all`)
 let topics = args.filter(arg => !arg.startsWith('--'))
 await mkdir(dist, { recursive: true })
 if (!topics.length || args.includes('--all')) {
   topics = [...new Set([...topics, ...(await readdir(dist)).filter(name => name.endsWith('.html')).map(name => name.slice(0, -5))])]
-  if (!topics.length) topics = ['style-sample']
+  if (!topics.length) fail('dist/ 中没有已有主题。新克隆不包含教材数据；请先准备 content/<topic>/manifest.json 及清单中的 Markdown 章节，然后运行 pnpm run build:standalone <topic>。')
 }
-for (const topic of topics) if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(topic)) throw new Error('Invalid topic')
+const manifests = new Map()
+for (const topic of topics) {
+  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(topic)) fail(`Invalid topic: ${topic}`)
+  const manifestPath = path.join(root, 'content', topic, 'manifest.json')
+  let manifest
+  try {
+    manifest = JSON.parse(await readFile(manifestPath, 'utf8'))
+  } catch (error) {
+    if (error.code === 'ENOENT') fail(`未找到 content/${topic}/manifest.json。请先准备或恢复主题清单；首次导入还需要清单中的 Markdown 章节。`)
+    fail(`无法读取 content/${topic}/manifest.json：${error.message}`)
+  }
+  if (!manifest || manifest.topic !== topic || typeof manifest.title !== 'string' || !manifest.title || manifest.output !== `${topic}.html`) fail(`Invalid manifest: content/${topic}/manifest.json`)
+  manifests.set(topic, manifest)
+}
 await mkdir(generated, { recursive: true })
 
 const client = await build({
@@ -120,8 +140,7 @@ ${article}
 }
 
 for (const topic of topics) {
-  const manifest = JSON.parse(await readFile(path.join(root, 'content', topic, 'manifest.json'), 'utf8'))
-  if (manifest.topic !== topic || typeof manifest.title !== 'string' || !manifest.title || manifest.output !== `${topic}.html`) throw new Error('Invalid manifest')
+  const manifest = manifests.get(topic)
   const target = path.join(dist, manifest.output)
   let previous
   try { previous = await readFile(target, 'utf8') } catch (error) { if (error.code !== 'ENOENT') throw error }
