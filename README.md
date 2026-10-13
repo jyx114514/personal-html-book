@@ -1,8 +1,26 @@
-# 对话/笔记转html教材/笔记 
+# 对话/笔记转html教材/笔记
 
-把 ChatGPT 对话、科学笔记和本地计算流程整理为中文交互式html教材/笔记。本仓库仅跟踪**制作工作流、可复用代码和规范**；实际教材内容和交付产物保留在本地。
+> English version: [README.en.md](README.en.md)（内容同步）
+
+把 ChatGPT 对话、科学笔记和本地计算流程整理为交互式 HTML 教材/笔记。本仓库仅跟踪**制作工作流、可复用代码和规范**；实际教材内容和交付产物保留在本地。
 
 默认交付为每个主题一个单文件 HTML，CSS、JavaScript、字体和图片全部内联。采用固定的学术教材（B）视觉体系，按需嵌入交互实验（D）。同时保留可选的 VitePress 网站模式。
+
+## 语言
+
+**正文语言不受限制**，中文、英文或其他语言均可：构建器不检查、不翻译、不改写正文，资源校验只检查是否内联；字体栈 `Inter, "Noto Sans SC", "Microsoft YaHei", sans-serif` 同时支持拉丁字母与汉字。
+
+需要注意一处已核实的事实：**导出外壳的少量界面文案目前硬编码为中文**，与正文语言无关。
+
+| 位置 | 硬编码内容 |
+| --- | --- |
+| `scripts/build-standalone.mjs` | `<html lang="zh-CN">`、目录 `aria-label`（教材目录）、目录标题（阅读目录）、目录展开按钮文案（展开目录）、横向滚动表格 `aria-label`（可横向滚动的数据表） |
+| `standalone/main.ts` | 代码块复制按钮 `aria-label`（复制代码） |
+| `docs/.vitepress/theme/outline.ts` | 运行时按钮文案（展开目录/收起目录），会覆盖 HTML 初始文本 |
+| `docs/.vitepress/theme/components/*.vue` | 内置实验组件 OmicsLab、ComputerLab、GradientDemo、CourseOutline 的界面文案；`OmicsLab.vue` 还使用了 `toLocaleString('zh-CN')` |
+| `docs/.vitepress/config.mts` | 网站模式的 `lang`、`title`、导航与侧边栏文案（可由用户按主题修改，不属于构建限制） |
+
+因此英文教材可以正常导出和阅读，只是目录、展开按钮与内置实验的标签仍是中文。标题类文案可在导出的 HTML 里直接改；其余标签需要修改共享构建脚本与主题，超出本次 README 修订范围。
 
 ## 使用
 
@@ -12,7 +30,7 @@ html样式已做一定约束，可让agent自己改仓库中对样式的相应�
 
 质量依旧会受所用的模型，和harness的影响
 
-考虑到需求的多样性，未对模型检索资料做相应的约束，请自行核查最后内容的正确性
+考虑到需求的多样性，未对模型检索资料做相应的约束，只让其列出参考资料，请自行核查最后内容的正确性
 
 ## 仓库范围
 
@@ -123,6 +141,7 @@ Git 忽略规则只约束当前与后续提交，不能撤回已公开的历史�
 .
 ├─ .agents/skills/dialogue-to-course/SKILL.md
 ├─ AGENTS.md、SKILL.md、README.md    # 项目指令、制作规范与说明
+├─ README.en.md                     # 英文说明（与本文互相引用）
 ├─ content/README.md                # 本地教材数据的使用说明
 ├─ docs/.vitepress/                 # 网站配置、共享主题与交互组件
 ├─ standalone/                     # 单文件导出运行时与共享布局
