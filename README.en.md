@@ -4,24 +4,20 @@
 
 Turn ChatGPT conversations, scientific notes, and local computational workflows into **interactive single-file HTML textbooks**. This repository tracks only the **authoring workflow, reusable code, and conventions**; actual textbook content and build artifacts stay on your local machine.
 
-The default deliverable is **one self-contained HTML file per topic**, with CSS, JavaScript, fonts, and images all inlined. It follows a fixed academic textbook (B) visual system and embeds interactive experiments (D) where they help. An optional VitePress site mode is also available.
+The default deliverable is **one self-contained HTML file per topic**, with CSS, JavaScript, fonts, and images all inlined. The shared academic textbook (B) theme uses warm paper, deep teal accents, serif headings, soft panels, and dark code blocks, with interactive experiments (D) where they help. An optional VitePress site mode is also available.
 
+<!-- readme-section: language -->
 ## Output language
 
-**The body text has no language restriction.** You can author a textbook in Chinese, English, or any other language — the builder never inspects, translates, or rewrites the prose, and the resource validator only checks that assets are inlined. The font stack (`Inter`, `"Noto Sans SC"`, `"Microsoft YaHei"`, `sans-serif`) renders both Latin and CJK text correctly.
+**The body text has no language restriction.** You can author a textbook in Chinese, English, or any other language — the builder never inspects, translates, or rewrites the prose, and the resource validator only checks that assets are inlined. Body text uses a shared sans-serif stack; headings use Georgia, Times New Roman, and Chinese serif fallbacks. Both support Latin and CJK text.
 
-One caveat, verified against the current code: a **small amount of export chrome is still hardcoded in Chinese**, independent of the content language:
+Set `"lang": "en"` in the topic manifest; the default is `zh-CN`. On first import, it sets `<html lang>` and the export shell's outline heading, navigation labels, expand/collapse button, table labels, and copy-button labels. Shared shell messages support Chinese and English; other valid language tags use English shell messages without translating the body.
 
-| Location | Hardcoded element |
-| --- | --- |
-| `scripts/build-standalone.mjs` | `<html lang="zh-CN">`, outline `aria-label` ("教材目录"), outline heading ("阅读目录"), outline toggle button ("展开目录"), scrollable-table `aria-label` ("可横向滚动的数据表") |
-| `standalone/main.ts` | code-block copy button `aria-label` ("复制代码") |
-| `docs/.vitepress/theme/outline.ts` | runtime toggle labels ("展开目录" / "收起目录"), which overwrite the initial HTML text |
-| `docs/.vitepress/theme/components/*.vue` | UI copy inside the built-in experiment components (OmicsLab, ComputerLab, GradientDemo, CourseOutline); `OmicsLab.vue` also uses `toLocaleString('zh-CN')` |
-| `docs/.vitepress/config.mts` | VitePress site `lang`, `title`, and nav/sidebar labels (user-editable per topic, not a build-time limit) |
+Default repackaging preserves the existing HTML body and `lang`, including manually revised navigation and tables. For an existing file, edit `<html lang>`, outline text, and the toggle's `data-expand-label` / `data-collapse-label` directly; an existing copy-button `aria-label` is also preserved.
 
-An English textbook therefore exports and reads correctly, but the outline, toggle button, and built-in experiment labels remain Chinese. Editing the body text of an exported file directly repairs the visible headings; the remaining labels require changes to the shared build script and theme, which are outside the scope of a README edit.
+Built-in experiments OmicsLab, ComputerLab, GradientDemo and the site's CourseOutline component still contain Chinese text; experiments are not translated automatically, and `OmicsLab.vue` still formats numbers with `zh-CN`. Site language, title, and navigation are configured separately in `docs/.vitepress/config.mts`.
 
+<!-- readme-section: usage -->
 ## Usage
 
 Hand a ChatGPT conversation, scientific notes, or a local computational workflow to any agent and ask it to produce an explanatory HTML page.
@@ -32,6 +28,7 @@ Output quality still depends on the model and harness you use.
 
 Because requirements vary, no constraint is imposed on source retrieval during authoring — the model is only asked to list references. **Verify the correctness of the final content yourself.**
 
+<!-- readme-section: scope -->
 ## Repository scope
 
 | Tracked in version control | Local only |
@@ -45,9 +42,11 @@ Because requirements vary, no constraint is imposed on source retrieval during a
 
 **Back up textbook bodies and local topic data separately.** This workflow repository does not back up or restore teaching content.
 
+<!-- readme-section: environment -->
 ## Environment and preparation
 
 - Node.js ≥ 22.13.
+- Use `markdown-it-mathjax3@^4.3.2`, matching VitePress 1.6's `^4` peer range; do not upgrade this dependency alone to v5.
 - pnpm ≥ 10.26 and < 11; the project pins 10.26.0 via `packageManager`, and `allowBuilds` is supported from that release onward ([release notes](https://github.com/pnpm/pnpm.io/blob/main/blog/releases/10.26.md)). Dependencies are locked by the committed `pnpm-lock.yaml`.
 - Browser verification additionally requires Microsoft Edge and an existing Playwright installation; the verification scripts never install dependencies.
 
@@ -68,6 +67,7 @@ Manifest format; the topic id uses lowercase letters, digits, and hyphens:
 {
   "topic": "my-topic",
   "title": "Textbook title",
+  "lang": "zh-CN",
   "output": "my-topic.html",
   "chapters": ["01-introduction.md"]
 }
@@ -75,6 +75,7 @@ Manifest format; the topic id uses lowercase letters, digits, and hyphens:
 
 The manifest lives at `content/my-topic/manifest.json`; chapters needed for the first import sit in the same directory. Refreshing the assets of an existing HTML still requires the manifest, but does not re-read the old Markdown.
 
+<!-- readme-section: authoring -->
 ## Authoring and editing
 
 `scripts/build-standalone.mjs` converts Markdown into static semantic HTML at build time, rendering formulas, code highlighting, and experiment initial values, reusing the shared theme and inlining every asset. Runtime JavaScript only enhances the outline, copy buttons, and experiment interaction — it never rebuilds the body. Authoring conventions live in `SKILL.md`, which must stay in sync with `.agents/skills/dialogue-to-course/SKILL.md`.
@@ -99,10 +100,15 @@ With no topic or with `--all`, the exporter only processes topics already in `di
 
 After changing a formula's `data-tex`, regenerate the static SVG/MathML as well; editing the TeX alone does not refresh the rendered formula.
 
+The outline keeps its fixed left desktop layout and collapsible top navigation on narrow screens, nesting body headings from H2 through H6. Parent headings remain links; arrows or the keyboard expand their subsections. Newly exported outlines use native `details`, which work with JavaScript disabled. Headings inside experiment containers are excluded; mark custom experiments with `data-course-outline="exclude"`. Give manually authored HTML headings stable, unique `id` values. Resource refresh preserves the existing body, while the runtime enhances historical flat outlines with subsections.
+
 Manually revised HTML remains the single source of truth. When appending later, read the current file and insert new content only at the end of the existing `<article>`, before `</article>`; leave existing body text and manual revisions untouched — no reformatting, no rebuild from old Markdown. New anchors must avoid every existing id, and the outline only gains new entries. Earlier sections stay untouched unless you explicitly ask to revise them. Historical backups are for traceability only; verification is based on the current HTML and does not require byte equality with old backups.
 
 When importing multiple chapters from Markdown for the first time, unique heading anchors are generated in one pass. Resource validation parses HTML attributes and CSS and rejects non-inlined images, styles, and other assets; ordinary reference links may remain. External images must be converted to data URLs first — validation does not download anything.
 
+Markdown import uses conservative validation: native HTML tags must be lowercase (for example, `<b>` rather than `<B>`), and components must be allowlisted. A `<style>` block in the body causes an explicit error; reuse shared styles. Tag and style examples inside code fences remain allowed. Each formula is checked at build time for `data-tex` injection and a static SVG; incompatible output fails immediately.
+
+<!-- readme-section: checks -->
 ## Checks and local site build
 
 ```bash
@@ -118,23 +124,29 @@ pnpm run build
 pnpm run preview
 
 # Verify standalone HTML using an existing Playwright and Edge
-node scripts/verify-native-html.mjs <directory-containing-playwright>
+node scripts/verify-native-html.mjs ./node_modules
 ```
 
 Numeric self-checks cover integer boundaries, float32 special cases, ABI layout, address arithmetic, and stack restoration. Browser verification covers opening `file://` offline, external requests, reading with JavaScript disabled, the outline and interactions, narrow viewports, and re-export after editing. The browser script exercises every slider, dropdown, text/number input, and available button of each experiment. Default lower bounds for body length and formula count are 1 and 0; override them per topic with `"validation": { "minBodyLength": 5000, "minFormulas": 6 }`. Textbooks without experiments can be verified too. A general rule checks local paths and links to private material; extra personal identifiers are passed as a JSON string array through the local environment variable `COURSE_PRIVATE_TERMS` and never enter the repository.
 
 Screenshots and results are written to `internal/native-html-test/`. Browser verification copies the current HTML and manifest into an isolated fixture and validates appending and re-export on the copy, so an interrupted process never touches the authoritative file. The temporary fixture is cleaned up on normal completion; screenshots and reports are kept. A passing typecheck or build never substitutes for real browser verification.
 
-`pnpm run verify` runs the Vue/TypeScript typecheck, ESLint over build scripts, the computational model self-check, and the export regression (including a temporary-page site build) in sequence; it exits successfully only when all pass. Running it locally before committing is enough — the repository stays local-only for authoring, checking, and building, and does not enable GitHub Actions. Browser verification of a real textbook requires an existing Edge and Playwright and is run separately.
+The browser verifier's path argument must directly contain `playwright/`, such as the project's `./node_modules`. For another existing installation, supply the absolute path to its `node_modules`, rather than the project root.
+
+For optional shell regression, run `node --test scripts/browser-shell.test.mjs` after setting `COURSE_PLAYWRIGHT_DIR` to an existing installation's `node_modules` directory. It creates isolated Chinese and English fixtures and checks offline reading, outline messages, custom labels, the component allowlist, and flux endpoints; it skips when the variable is unset. Results are saved in `internal/test-feedback-browser/`.
+
+`pnpm run verify` first checks byte equality of the SKILL copies and matching section markers and runnable examples in the bilingual READMEs (translation meaning is not checked automatically). It then runs the Vue/TypeScript typecheck, ESLint over build scripts, the computational model self-check, and build-contract/export regression tests (including a temporary-page site build) in sequence; it exits successfully only when all pass. Running it locally before committing is enough — the repository stays local-only for authoring, checking, and building, and does not enable GitHub Actions. Browser verification of a real textbook requires an existing Edge and Playwright and is run separately.
 
 Export backups use a timestamp plus a random suffix to avoid same-millisecond collisions; backups are never deleted automatically. Archive `internal/html-export-backups/` manually when you want to prune, and confirm a restore point before deleting old copies.
 
 Git ignore rules only constrain current and future commits; they cannot withdraw already published historical copies. History cleanup requires a private backup and explicit authorization; a local rewrite does not mean remote or cloned copies are cleaned up too.
 
+<!-- readme-section: delivery -->
 ## Local delivery
 
 Standalone textbooks are written to `dist/<topic>.html`, directly editable and usable offline. The optional VitePress site output goes to `docs/.vitepress/dist/`; the local build path is set through the `SITE_BASE` environment variable — `/` for a domain root, the matching path for a subdirectory.
 
+<!-- readme-section: layout -->
 ## Directory layout
 
 ```text
@@ -152,6 +164,7 @@ Standalone textbooks are written to `dist/<topic>.html`, directly editable and u
 
 Topic data, site pages and assets, `dist/`, `sources/`, `internal/`, `.standalone/`, and `node_modules/` are created or restored locally as needed and are outside version control.
 
+<!-- readme-section: license -->
 ## License
 
 [MIT](LICENSE). Published textbooks cite already published sources; raw conversations and private verification records stay local. The user performs final review before local delivery.

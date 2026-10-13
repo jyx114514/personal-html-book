@@ -104,9 +104,9 @@ const percent = (n: number) => (n * 100).toFixed(1) + '%'
       <label>稳态流入 = 流出（池单位 / 分钟）：{{ flux }}<input v-model.number="flux" aria-label="稳态通量" type="range" min="0.5" max="10" step="0.5" /></label>
       <label>示踪时间（分钟）：{{ time }}<input v-model.number="time" aria-label="示踪时间" type="range" min="0" max="20" /></label>
       <svg viewBox="0 0 540 190" role="img" :aria-label="`固定池大小 10；通量 ${flux}；${time} 分钟时标记比例 ${percent(labelled)}`">
-        <line class="axis" x1="45" y1="155" x2="500" y2="155" /><line class="axis" x1="45" y1="30" x2="45" y2="155" />
+        <line class="axis" x1="45" y1="155" x2="495" y2="155" /><line class="axis" x1="45" y1="30" x2="45" y2="155" />
         <polyline class="curve" :points="curve" /><circle class="signal" :cx="45+time*22.5" :cy="155-labelled*120" r="5" />
-        <text x="5" y="28">100%</text><text x="15" y="156">0%</text><text x="45" y="178">0 min</text><text x="465" y="178">20 min</text>
+        <text x="5" y="28">100%</text><text x="15" y="156">0%</text><text x="45" y="178">0 min</text><text x="495" y="178" text-anchor="end">20 min</text>
       </svg>
       <div class="lab-result" aria-live="polite"><p>池大小固定为 10；净积累速度为 0；周转时间 = {{ (10/flux).toFixed(1) }} 分钟；{{ time }} 分钟时标记比例 = {{ percent(labelled) }}。</p></div>
       <p>单一、充分混合且恒定的池；标记输入瞬时达到 100%，不可逆流出且无旁路。此教学模型不等于完整的 ¹³C-MFA。</p>

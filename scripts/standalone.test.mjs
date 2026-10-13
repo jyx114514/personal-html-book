@@ -38,16 +38,25 @@ test('real exporter assigns book-wide anchors and preserves human revisions and 
   const source = path.join(fixture, 'content', 'regression')
   await mkdir(source, { recursive: true })
   await writeFile(path.join(source, 'manifest.json'), JSON.stringify({ topic: 'regression', title: 'Regression', output: 'regression.html', chapters: ['one.md', 'two.md'] }))
-  await writeFile(path.join(source, 'one.md'), '## Summary\n\nFirst chapter.\n\n$x^2$\n')
+  await writeFile(path.join(source, 'one.md'), '## Summary\n\nFirst chapter.\n\n### Mechanism\n\nDetail.\n\n#### Edge case\n\nDeeper detail.\n\n<section class="explorer"><h3 id="lab-silent">Not a chapter</h3><p>Experiment.</p></section>\n\n$x^2$\n\n$$\nx < y\n$$\n')
   await writeFile(path.join(source, 'two.md'), '## Summary\n\nSecond chapter.\n\n$x^3$\n')
   const build = (...args) => execFileSync(process.execPath, ['scripts/build-standalone.mjs', ...(args.length ? args : ['regression'])], { cwd: fixture, stdio: 'pipe' })
   build()
   const target = path.join(fixture, 'dist', 'regression.html')
   const original = await readFile(target, 'utf8')
+  assert.throws(() => execFileSync(process.execPath, ['scripts/verify-native-html.mjs', '.'], { cwd: fixture, stdio: 'pipe' }), error => /直接包含 playwright\/ 的 node_modules 目录/.test(String(error.stderr)))
+  assert.equal([...original.matchAll(/<mjx-container data-tex=/g)].length, 3, 'Every inline and block formula needs source TeX')
+  assert.match(original, /data-tex="x &lt; y\n"/)
+  assert.equal([...original.matchAll(/<mjx-container\b/g)].length, 3)
+  assert.match(original, /<html lang="zh-CN">/)
   const ids = [...original.matchAll(/<h2 id="([^"]+)"/g)].map(match => match[1])
   assert.equal(ids.length, 2)
   assert.equal(new Set(ids).size, 2, 'Duplicate chapter anchors')
-  for (const id of ids) assert.ok(original.includes(`<li><a href="#${id}">`), `Missing navigation for ${id}`)
+  for (const id of ids) assert.ok(original.includes(`<a href="#${id}">`), `Missing navigation for ${id}`)
+  assert.match(original, /<details class="outline-branch"><summary><a href="#summary">/)
+  assert.match(original, /href="#mechanism"/)
+  assert.match(original, /href="#edge-case"/)
+  assert.doesNotMatch(original, /href="#lab-silent"/)
   const revised = original.replace('First chapter.', 'Human revision that must survive.')
   const end = revised.lastIndexOf('</article>')
   const appended = revised.slice(0, end) + '<h2 id="appended">Appended chapter</h2>\n<p>New material.</p>\n' + revised.slice(end)
@@ -93,7 +102,17 @@ test('real exporter assigns book-wide anchors and preserves human revisions and 
     assert.throws(() => build('regression', '--from-markdown'), error => /Invalid mode/.test(String(error.stderr)))
     assert.equal(await readFile(target, 'utf8'), before)
   }
-  await writeFile(path.join(source, 'one.md'), '## A & B < C\n\n<CoursePanel title="Say &quot;hello&quot; &amp; goodbye">\n\nPanel text.\n\n</CoursePanel>\n\n<OmicsLab mode="tpm" />\n\n<ComputerLab mode="bits" />\n\n<GradientDemo />')
+  for (const [snippet, message] of [
+    ['<style>p{color:red}</style>', /不允许 <style>/],
+    ['<div>\n<style>p{color:red}</style>\n</div>', /不允许 <style>/],
+    ['<B>Example</B>', /仅允许小写/],
+  ]) {
+    await writeFile(path.join(source, 'one.md'), '## Authoring validation\n\n' + snippet)
+    const before = await readFile(target, 'utf8')
+    assert.throws(() => build('regression', '--from-markdown'), error => message.test(String(error.stderr)))
+    assert.equal(await readFile(target, 'utf8'), before, 'Invalid author input overwrote current HTML')
+  }
+  await writeFile(path.join(source, 'one.md'), '## A & B < C\n\n<CoursePanel title="Say &quot;hello&quot; &amp; goodbye">\n\nPanel text.\n\n</CoursePanel>\n\n<OmicsLab mode="tpm" />\n\n<ComputerLab mode="bits" />\n\n<GradientDemo />\n\n```html\n<B>Example</B>\n<style>p{color:red}</style>\n```')
   build('regression', '--from-markdown')
   const valid = await readFile(target, 'utf8')
   assert.match(valid, /Say &quot;hello&quot; &amp; goodbye/)
@@ -101,10 +120,35 @@ test('real exporter assigns book-wide anchors and preserves human revisions and 
   assert.match(valid, /A &amp; B &lt; C/)
   assert.doesNotMatch(valid, /A &amp;amp;/)
   // Build site mode from synthetic data; no private textbook is needed.
-  await writeFile(path.join(fixture, 'docs/index.md'), '# Verification\n\n<OmicsLab mode="tpm" />\n\n<ComputerLab mode="bits" />\n\n<GradientDemo />')
+  await writeFile(path.join(fixture, 'docs/index.md'), '# Verification\n\n$x^2$\n\n$$\nx < y\n$$\n\n<OmicsLab mode="tpm" />\n\n<ComputerLab mode="bits" />\n\n<GradientDemo />')
   execFileSync(process.execPath, ['scripts/build-site.mjs'], { cwd: fixture, stdio: 'pipe' })
   const site = await readFile(path.join(fixture, 'docs/.vitepress/dist/index.html'), 'utf8')
   assert.match(site, /Counts 与 TPM/)
   assert.match(site, /同一组位，两种整数解释/)
+  assert.equal([...site.matchAll(/<mjx-container\b/g)].length, 2, 'Site mode must actually render inline and block math')
+
+  // Two topics in a single process exercise the cached Markdown renderer's locale.
+  const localizedTopics = ['locale-en', 'locale-zh']
+  for (const [index, topic] of localizedTopics.entries()) {
+    const folder = path.join(fixture, 'content', topic)
+    await mkdir(folder, { recursive: true })
+    await writeFile(path.join(folder, 'manifest.json'), JSON.stringify({ topic, title: topic, lang: index ? 'zh-CN' : 'en', output: `${topic}.html`, chapters: ['one.md'] }))
+    await writeFile(path.join(folder, 'one.md'), '## Contents\n\n$x^2$\n\n| A | B |\n| - | - |\n| 1 | 2 |\n')
+  }
+  build(...localizedTopics)
+  const englishPath = path.join(fixture, 'dist/locale-en.html')
+  const english = await readFile(englishPath, 'utf8')
+  assert.match(english, /<html lang="en">/)
+  assert.match(english, /data-collapse-label="Collapse contents"/)
+  assert.match(english, /aria-label="Scrollable data table"/)
+  const chinese = await readFile(path.join(fixture, 'dist/locale-zh.html'), 'utf8')
+  assert.match(chinese, /aria-label="可横向滚动的数据表"/)
+  assert.match(chinese, /data-collapse-label="收起目录"/)
+  const editedLocale = english.replace('<html lang="en">', "<html lang='fr'>").replace('data-expand-label="Expand contents"', 'data-expand-label="Custom contents"')
+  await writeFile(englishPath, editedLocale)
+  build('locale-en')
+  const repacked = await readFile(englishPath, 'utf8')
+  assert.match(repacked, /<html lang="fr">/)
+  assert.equal(body(repacked), body(editedLocale), 'Locale changes must not rewrite the authoritative body')
 
 })

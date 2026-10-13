@@ -1,4 +1,5 @@
 import { mountOutline } from '../docs/.vitepress/theme/outline'
+import { courseUi } from '../docs/.vitepress/theme/course-ui.mjs'
 import { createSSRApp } from 'vue'
 import GradientDemo from '../docs/.vitepress/theme/components/GradientDemo.vue'
 import OmicsLab from '../docs/.vitepress/theme/components/OmicsLab.vue'
@@ -14,7 +15,7 @@ import '../docs/.vitepress/theme/outline.css'
 const labs = { GradientDemo, OmicsLab, ComputerLab }
 for (const island of Array.from(document.querySelectorAll<HTMLElement>('[data-course-component]'))) {
   const name = island.dataset.courseComponent as keyof typeof labs
-  if (!labs[name]) continue
+  if (!Object.hasOwn(labs, name)) continue
   createSSRApp(labs[name], island.dataset.mode ? { mode: island.dataset.mode } : {}).mount(island)
 }
 
@@ -22,7 +23,7 @@ mountOutline(document)
 
 for (const button of Array.from(document.querySelectorAll<HTMLButtonElement>('button.copy'))) {
   button.type = 'button'
-  button.setAttribute('aria-label', '复制代码')
+  if (!button.hasAttribute('aria-label')) button.setAttribute('aria-label', courseUi(document.documentElement.lang || 'zh-CN').copy)
   button.addEventListener('click', async () => {
     const text = button.parentElement?.querySelector('pre code')?.textContent ?? ''
     try {

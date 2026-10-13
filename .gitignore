@@ -1,5 +1,6 @@
 # Dependencies and local build outputs
 /node_modules/
+/.pnpm-store/
 /.standalone/
 /dist/
 /docs/.vitepress/cache/

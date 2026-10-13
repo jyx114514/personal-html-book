@@ -6,6 +6,9 @@ import { build } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { createMarkdownRenderer } from 'vitepress'
 import { assertStandaloneResources } from './standalone-validation.mjs'
+import { renderMathWithTex } from './standalone-math.mjs'
+import { courseUi } from '../docs/.vitepress/theme/course-ui.mjs'
+import { buildOutlineTree, renderOutlineTree, outlineExcludedClasses } from '../docs/.vitepress/theme/outline-model.mjs'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const generated = path.join(root, '.standalone')
@@ -38,6 +41,8 @@ for (const topic of topics) {
     fail(`无法读取 content/${topic}/manifest.json：${error.message}`)
   }
   if (!manifest || manifest.topic !== topic || typeof manifest.title !== 'string' || !manifest.title || manifest.output !== `${topic}.html`) fail(`Invalid manifest: content/${topic}/manifest.json`)
+  try { manifest.lang = new Intl.Locale(manifest.lang ?? 'zh-CN').toString() }
+  catch { fail(`Invalid lang: content/${topic}/manifest.json`) }
   manifests.set(topic, manifest)
 }
 await mkdir(generated, { recursive: true })
@@ -86,25 +91,32 @@ const plain = text => {
 }
 let renderer
 async function importMarkdown(topic, manifest) {
+  const ui = courseUi(manifest.lang)
   const source = path.join(root, 'content', topic)
   if (!Array.isArray(manifest.chapters) || !manifest.chapters.length || new Set(manifest.chapters).size !== manifest.chapters.length) throw new Error('Invalid chapters')
   // VitePress caches the renderer: install extensions once for a multi-topic export.
   if (!renderer) {
     renderer = await createMarkdownRenderer(root, { math: true })
+    renderer.core.ruler.push('course-no-author-style', state => {
+      const hasStyle = tokens => tokens.some(token =>
+        (token.type.startsWith('html_') && /<style\b/i.test(token.content)) || (token.children && hasStyle(token.children)))
+      if (hasStyle(state.tokens)) throw new Error(`content/${state.env.courseTopic}：Markdown 中不允许 <style> 块；请复用共享样式，不得编写单页专属 CSS。`)
+    })
     const tableOpen = renderer.renderer.rules.table_open || ((tokens, index, options, env, self) => self.renderToken(tokens, index, options))
     const tableClose = renderer.renderer.rules.table_close || ((tokens, index, options, env, self) => self.renderToken(tokens, index, options))
-    renderer.renderer.rules.table_open = (...args) => `<div class="course-table-scroll" role="region" aria-label="可横向滚动的数据表" tabindex="0">${tableOpen(...args)}`
+    renderer.renderer.rules.table_open = (...args) => `<div class="course-table-scroll" role="region" aria-label="${escape(courseUi(args[3].courseLang).table)}" tabindex="0">${tableOpen(...args)}`
     renderer.renderer.rules.table_close = (...args) => `${tableClose(...args)}</div>`
     for (const type of ['math_inline', 'math_block']) {
       const rule = renderer.renderer.rules[type]
+      if (typeof rule !== 'function') throw new Error(`Missing MathJax renderer: ${type}`)
       renderer.renderer.rules[type] = (...args) => {
         const tex = escape(args[0][args[1]].content)
-        return rule(...args).replace(/<span id="mjx-/, `<span data-tex="${tex}" id="mjx-`)
+        return renderMathWithTex(rule(...args), tex, args[3].courseMathStyles, type)
       }
     }
   }
   const chapters = []
-  const mathStyles = []
+  const mathStyles = new Set()
   for (const chapter of manifest.chapters) {
     const target = path.resolve(source, chapter)
     if (!target.startsWith(source + path.sep) || !target.endsWith('.md')) throw new Error('Invalid chapter path')
@@ -112,7 +124,8 @@ async function importMarkdown(topic, manifest) {
     chapters.push(await readFile(target, 'utf8'))
   }
   // A single render gives the anchor plugin a book-wide slug namespace.
-  let article = renderer.render(chapters.join('\n\n')).replace(/<style\b[^>]*>([\s\S]*?)<\/style>/gi, (_, style) => { mathStyles.push(style); return '' }) + '\n'
+  const env = { courseTopic: topic, courseLang: manifest.lang, courseMathStyles: mathStyles }
+  let article = renderer.render(chapters.join('\n\n'), env) + '\n'
   const replacements = []
   async function convert(node) {
     if (node.type === 1 && ['CoursePanel', ...Object.keys(modes)].includes(node.tag)) {
@@ -140,20 +153,35 @@ async function importMarkdown(topic, manifest) {
   await convert(parseHtml(article, { parseMode: 'html' }))
   for (const replacement of replacements.sort((a, b) => b.start - a.start)) article = article.slice(0, replacement.start) + replacement.text + article.slice(replacement.end)
   article = article.replace(/\s+v-pre=""/g, '')
-  if (/<\/?[A-Z][A-Za-z]*\b/.test(article)) throw new Error('Unconverted component in article')
+  if (/<\/?[A-Z][A-Za-z]*\b/.test(article)) throw new Error('Unconverted component in article；Markdown 导入仅允许小写原生 HTML 标签（例如 <b>）；组件须使用构建器白名单。')
   const descendants = node => (node.children ?? []).flatMap(child => [child, ...descendants(child)])
   const attribute = (node, name) => node.props?.find(prop => prop.type === 6 && prop.name === name)?.value?.content
-  const nodes = descendants(parseHtml(article, { parseMode: 'html' }))
-  const sourceNav = nodes.find(node => attribute(node, 'class')?.split(/\s+/).includes('course-outline-source'))
-  const items = sourceNav
-    ? descendants(sourceNav).filter(node => node.tag === 'a' && attribute(node, 'href')?.startsWith('#')).map(node => ({ href: attribute(node, 'href'), title: plain(node.loc.source) }))
-    : nodes.filter(node => node.tag === 'h2' && attribute(node, 'id')).map(node => ({ href: '#' + attribute(node, 'id'), title: plain(node.loc.source) }))
-  const nav = items.map(item => `          <li><a href="${escape(item.href)}">${escape(item.title)}</a></li>`).join('\n')
+  const nodes = []
+  function collect(node) {
+    const classes = attribute(node, 'class')?.split(/\s+/) ?? []
+    if (node.type === 1 && (node.props.some(prop => prop.name === 'data-course-component') || attribute(node, 'data-course-outline') === 'exclude' || classes.some(name => outlineExcludedClasses.includes(name)))) return
+    nodes.push(node)
+    for (const child of node.children ?? []) collect(child)
+  }
+  const tree = parseHtml(article, { parseMode: 'html' })
+  for (const child of tree.children) collect(child)
+  const allNodes = descendants(tree)
+  const sourceNav = allNodes.find(node => attribute(node, 'class')?.split(/\s+/).includes('course-outline-source'))
+  const records = new Map(nodes.filter(node => /^h[2-6]$/.test(node.tag) && attribute(node, 'id')).map(node => [node, { href: '#' + attribute(node, 'id'), title: plain(node.loc.source), level: Number(node.tag.slice(1)) }]))
+  for (const link of sourceNav ? descendants(sourceNav).filter(node => node.tag === 'a' && attribute(node, 'href')?.startsWith('#')) : []) {
+    const href = attribute(link, 'href')
+    let id = href.slice(1)
+    try { id = decodeURIComponent(id) } catch { /* Keep literal hash. */ }
+    const target = nodes.find(node => attribute(node, 'id') === id)
+    if (target) records.set(target, { href, title: plain(link.loc.source), level: records.get(target)?.level ?? 2 })
+  }
+  const items = [...records.entries()].sort(([a], [b]) => a.loc.start.offset - b.loc.start.offset).map(([, item]) => item)
+  const nav = renderOutlineTree(buildOutlineTree(items))
   const body = `<main class="textbook course-shell">
-  <aside class="course-outline" aria-label="教材目录">
-    <div class="outline-heading">阅读目录</div>
-    <button class="outline-toggle" type="button" aria-expanded="false" aria-controls="course-outline-links">展开目录</button>
-    <nav id="course-outline-links" aria-label="章节导航"><ol>
+  <aside class="course-outline" aria-label="${escape(ui.outline)}">
+    <div class="outline-heading">${escape(ui.heading)}</div>
+    <button class="outline-toggle" type="button" aria-expanded="false" aria-controls="course-outline-links" data-expand-label="${escape(ui.expand)}" data-collapse-label="${escape(ui.collapse)}">${escape(ui.expand)}</button>
+    <nav id="course-outline-links" aria-label="${escape(ui.navigation)}"><ol>
 ${nav}
     </ol></nav>
   </aside>
@@ -163,7 +191,7 @@ ${article}
     </article>
   </div>
 </main>`
-  return { body, mathCss: mathStyles.join('\n') }
+  return { body, mathCss: [...mathStyles].join('\n') }
 }
 
 for (const topic of topics) {
@@ -173,14 +201,17 @@ for (const topic of topics) {
   try { previous = await readFile(target, 'utf8') } catch (error) { if (error.code !== 'ENOENT') throw error }
   const existingBody = previous?.match(/<!-- course:body:start -->(?:\r?\n)?([\s\S]*?)(?:\r?\n)?<!-- course:body:end -->/)
   if (previous && !existingBody) fail('正文保护标记缺失或不完整：' + manifest.output + '；请恢复 course:body:start/end 标记后重试。')
-  let body, mathCss, title
+  let body, mathCss, title, lang
   if (existingBody && !fromMarkdown) {
     body = existingBody[1]
     mathCss = previous.match(/<style id="course-math-styles">([\s\S]*?)<\/style>/)?.[1] ?? ''
     title = previous.match(/<title>([\s\S]*?)<\/title>/)?.[1] ?? escape(manifest.title)
+    const htmlNode = parseHtml(previous, { parseMode: 'html' }).children.find(node => node.tag === 'html')
+    lang = escape(htmlNode?.props.find(prop => prop.type === 6 && prop.name === 'lang')?.value?.content ?? manifest.lang)
   } else {
     ;({ body, mathCss } = await importMarkdown(topic, manifest))
     title = escape(manifest.title)
+    lang = escape(manifest.lang)
   }
   if (previous) {
     const backupRoot = path.join(root, 'internal', 'html-export-backups')
@@ -189,7 +220,7 @@ for (const topic of topics) {
     await copyFile(target, path.join(backup, manifest.output))
   }
   const html = `<!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="${lang}">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">

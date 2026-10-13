@@ -12,11 +12,12 @@ let names
 try { names = (await readdir(path.join(root, 'dist'))).filter(name => name.endsWith('.html')) }
 catch (error) { if (error.code === 'ENOENT') fail('未找到 dist/；请先构建至少一个独立 HTML。'); throw error }
 if (!names.length) fail('dist/ 中没有 HTML；请先构建教材。')
-if (!process.argv[2]) fail('用法：node scripts/verify-native-html.mjs <含-playwright-的目录>')
-const require = createRequire(path.resolve(process.argv[2], '../package.json'))
+if (!process.argv[2]) fail('用法：node scripts/verify-native-html.mjs ./node_modules（该目录内必须直接包含 playwright/）')
+const playwrightPath = path.resolve(process.argv[2], 'playwright')
+const require = createRequire(path.join(root, 'package.json'))
 let chromium
-try { ({ chromium } = require(path.resolve(process.argv[2], 'playwright'))) }
-catch { fail('无法加载指定目录的 Playwright；请提供已有安装路径。') }
+try { ({ chromium } = require(playwrightPath)) }
+catch (error) { fail(`无法加载 ${playwrightPath}；参数必须是直接包含 playwright/ 的 node_modules 目录，例如 ./node_modules。原始错误：${error.message}`) }
 const directory = path.join(root, 'internal/native-html-test')
 await mkdir(directory, { recursive: true })
 let browser
@@ -64,7 +65,8 @@ try {
     }
     assert.ok(bodyText.length >= validation.minBodyLength)
     assert.ok(counts.formulas >= validation.minFormulas)
-    assert.equal(await page.locator('[id^="mjx-"][data-tex]').count(), counts.formulas)
+    // Accept both current container attributes and historical v5 source wrappers.
+    assert.equal(await page.locator('mjx-container[data-tex], [id^="mjx-"][data-tex]').count(), counts.formulas)
     assert.equal(await page.locator('.course-table-scroll .course-table-scroll').count(), 0)
     const staticBody = extractBody(original)
     assert.match(staticBody, /<article class="vp-doc">/)
