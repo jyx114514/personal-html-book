@@ -1,11 +1,25 @@
-node_modules/
-docs/.vitepress/cache/
-docs/.vitepress/dist/
+# Dependencies and local build outputs
+/node_modules/
+/.standalone/
+/dist/
+/docs/.vitepress/cache/
+/docs/.vitepress/dist/
 .DS_Store
 
-# Private inputs and editorial review (not for public repository)
-sources/*
-!sources/.gitkeep
-internal/
-.standalone/
-dist/
+# GitHub contains the workflow, not authored textbooks or website pages.
+# Keep only the content guide and reusable VitePress configuration/theme.
+/content/*
+!/content/README.md
+/docs/*
+!/docs/.vitepress/
+*.html
+*.htm
+
+# Private inputs, editorial review and local configuration
+/sources/
+/internal/
+.env
+.env.*
+!.env.example
+/.venv/
+*.log
