@@ -86,10 +86,17 @@ test('real exporter assigns book-wide anchors and preserves human revisions and 
 
   assert.doesNotMatch(await readFile(target, 'utf8'), /Human revision that must survive/)
   const beforeMalformed = await readFile(target, 'utf8')
-  const malformed = beforeMalformed.replace('<!-- course:body:end -->', '')
-  await writeFile(target, malformed)
-  assert.throws(() => build(), error => /正文保护标记/.test(String(error.stderr)))
-  assert.equal(await readFile(target, 'utf8'), malformed)
+  for (const malformed of [
+    '',
+    beforeMalformed.replace('<!-- course:body:end -->', ''),
+    beforeMalformed.replace('</article>', '<!-- course:body:end -->\n<p>Must not be discarded</p></article>'),
+    beforeMalformed.replace('<article', '<!-- course:body:start -->\n<article'),
+    beforeMalformed.replace(/<!-- course:body:(start|end) -->/g, (_, side) => `<!-- course:body:${side === 'start' ? 'end' : 'start'} -->`),
+  ]) {
+    await writeFile(target, malformed)
+    assert.throws(() => build(), error => /正文保护标记/.test(String(error.stderr)))
+    assert.equal(await readFile(target, 'utf8'), malformed, 'Ambiguous or empty HTML must not be overwritten')
+  }
   await writeFile(target, beforeMalformed)
   const backups = await readdir(path.join(fixture, 'internal/html-export-backups'))
   assert.ok(backups.length >= 4)

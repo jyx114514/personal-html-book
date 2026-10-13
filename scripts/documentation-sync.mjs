@@ -32,4 +32,9 @@ export async function assertDocumentationSync(root) {
   const files = ['SKILL.md', '.agents/skills/dialogue-to-course/SKILL.md', 'README.md', 'README.en.md']
   const [skill, localSkill, chinese, english] = await Promise.all(files.map(file => readFile(path.join(root, file))))
   assertDocumentationCopies(skill, localSkill, chinese.toString('utf8'), english.toString('utf8'))
+  for (const guide of ['authoring', 'maintenance']) {
+    const names = [`handbook/${guide}.md`, `handbook/${guide}.en.md`]
+    const copies = await Promise.all(names.map(file => readFile(path.join(root, file), 'utf8')))
+    assert.deepEqual(readmeContract(copies[0], names[0]), readmeContract(copies[1], names[1]), `${guide} 中英文结构或可执行示例不同步`)
+  }
 }

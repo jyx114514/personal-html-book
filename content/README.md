@@ -1,5 +1,7 @@
 # 教材编辑入口
 
+项目用途见 [README](../README.md)，主题清单格式与构建操作见[制作指南](../handbook/authoring.md)。
+
 本目录仅跟踪这份使用说明。所有主题目录（包括 `manifest.json` 与历史 Markdown）均保留在本地，由 `.gitignore` 排除。
 新克隆的仓库不包含主题数据。构建前，先从自己的备份恢复 `content/<topic>/manifest.json` 和 `dist/<topic>.html`；首次从 Markdown 导入时，还需提供清单中的章节文件。请单独备份这些本地内容，Git 不负责保存它们。
 

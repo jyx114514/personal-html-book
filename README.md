@@ -1,170 +1,49 @@
-# 对话/笔记转html教材/笔记
+# 对话与笔记转交互式 HTML
 
-> English version: [README.en.md](README.en.md)（内容同步）
+[English](README.en.md)
 
-把 ChatGPT 对话、科学笔记和本地计算流程整理为交互式 HTML 教材/笔记。本仓库仅跟踪**制作工作流、可复用代码和规范**；实际教材内容和交付产物保留在本地。
+这是一个供 Codex 等 AI agent 使用的本地制作工作流：把 ChatGPT 对话、科学笔记和本地计算流程整理成结构清晰、可阅读和探索的交互式 HTML 教材或笔记。
 
-默认交付为每个主题一个单文件 HTML，CSS、JavaScript、字体和图片全部内联。统一采用暖白纸面、深青绿强调色、衬线标题、柔和面板与深色代码块的学术教材（B）视觉体系，按需嵌入交互实验（D）。同时保留可选的 VitePress 网站模式。
-
-<!-- readme-section: language -->
-## 语言
-
-**正文语言不受限制**，中文、英文或其他语言均可：构建器不检查、不翻译、不改写正文，资源校验只检查是否内联。正文使用共享无衬线字体栈，标题使用 Georgia、Times New Roman、宋体等衬线回退，均支持拉丁字母与汉字。
-
-主题清单可指定 `"lang": "en"`，默认 `zh-CN`。首次导入时，它设置 `<html lang>` 和导出外壳的目录标题、导航标签、展开/收起按钮、表格与复制按钮标签。共享文案支持中文和英文；其他有效语言标记使用英文外壳，不翻译正文。
-
-默认重新打包保留已有 HTML 的正文与 `lang`，不会改写人工修订的目录或表格。已有文件可直接修改 `<html lang>`、目录文本及按钮的 `data-expand-label` / `data-collapse-label`；复制按钮已有的 `aria-label` 也会保留。
-
-内置实验 OmicsLab、ComputerLab、GradientDemo 和网站组件 CourseOutline 的内容仍为中文，实验不会自动翻译；`OmicsLab.vue` 的数字格式仍使用 `zh-CN`。网站模式的语言、标题与导航由 `docs/.vitepress/config.mts` 单独配置。
+Agent 负责组织内容、检索与核查资料、补充解释和制作交互；仓库提供制作规范、共享样式、组件及构建检查工具。默认每个主题交付一个可离线打开的 HTML 文件，也支持可选的 VitePress 网站模式。
 
 <!-- readme-section: usage -->
-## 使用
+## 如何使用
 
-把ChatGPT 对话、科学笔记和本地计算流程给任意agent让其创建讲解html即可，
+在支持读写本地文件、运行命令的 agent 中打开本仓库，提供原始材料、目标读者和希望讲清楚的问题。例如：
 
-html样式已做一定约束，可让agent自己改仓库中对样式的相应约束
+> 请阅读 AGENTS.md 和其中指定的制作规范，把我提供的对话与笔记整理成一个交互式 HTML 教材。面向有基础但不了解该主题的读者，补充必要背景，核查关键论述并列出参考资料；保留实际计算步骤和参数，说明哪些结果已经运行验证。完成构建和适用检查后，给出 HTML 文件路径及未验证事项。
 
-质量依旧会受所用的模型，和harness的影响
-
-考虑到需求的多样性，未对模型检索资料做相应的约束，只让其列出参考资料，请自行核查最后内容的正确性
-
-<!-- readme-section: scope -->
-## 仓库范围
-
-| 纳入版本控制 | 仅保留在本地 |
-| --- | --- |
-| 项目指令、两份同步的 `SKILL.md`、说明文档、许可证 | `sources/` 原始材料、`internal/` 内部记录与备份 |
-| `scripts/` 构建与验收脚本、`standalone/` 导出运行时 | `content/<topic>/` 主题清单和历史 Markdown |
-| `docs/.vitepress/` 网站配置、共享主题和交互组件 | `docs/index.md`、`docs/chapters/`、`docs/public/` 等页面和资源 |
-| 依赖清单、锁文件、TypeScript 配置、本地检查脚本 | `dist/` 单文件教材、网站缓存及构建结果、依赖与本地配置 |
-
-`content/` 仅提交 `README.md`；`docs/` 仅提交 `.vitepress/` 的配置和共享主题代码，缓存与构建结果除外。HTML 文件也被忽略。不要使用 `git add -f` 把教材或网页加入此仓库。
-
-**教材正文及本地主题数据需单独备份。** 工作流仓库不承担教材备份与恢复。
-
-<!-- readme-section: environment -->
-## 环境与准备
-
-- Node.js ≥ 22.13。
-- 数学插件使用 `markdown-it-mathjax3@^4.3.2`，与 VitePress 1.6 的 `^4` peer 范围对齐；不要单独升级到 v5。
-- pnpm ≥ 10.26 且 < 11；项目通过 `packageManager` 固定为 10.26.0，`allowBuilds` 从该版本起受支持（[官方说明](https://github.com/pnpm/pnpm.io/blob/main/blog/releases/10.26.md)）。使用仓库中的 `pnpm-lock.yaml` 锁定依赖。
-- 浏览器验收另需 Microsoft Edge 和已有的 Playwright 安装；验收脚本不会安装依赖。
+首次使用需要 Node.js ≥ 22.13 和项目指定的 pnpm 10.26.0。准备依赖并检查工作流：
 
 ```bash
 pnpm install --frozen-lockfile
 pnpm run verify
 ```
 
-新克隆仓库不包含教材数据。构建教材前，先在本地准备或恢复：
+新克隆不包含教材示例或主题数据；agent 按[制作与构建指南](handbook/authoring.md)准备主题后，输出到 `dist/<topic>.html`，可直接用浏览器打开。后续修订或追加时，把当前 HTML 交给 agent；它是正文的权威版本。
 
-1. `content/<topic>/manifest.json`：主题元数据。
-2. `dist/<topic>.html`：已有教材的正文权威版本；首次制作时可先提供清单中的 Markdown 章节。
-3. 使用网站模式时，提供 `docs/index.md`、章节和页面资源。缺少首页时构建会明确报错并以非零退出码停止；预置导航只显示本地存在的页面，新增章节需按需调整 `docs/.vitepress/config.mts`。
+<!-- readme-section: output -->
+## 输出与边界
 
-主题清单格式如下，主题标识使用小写字母、数字和连字符：
+- 统一的学术教材样式，支持公式、代码、表格、参考文献和按需加入的交互实验。
+- 正文直接存储在 HTML 中，可编辑；关闭 JavaScript 仍能阅读静态内容。
+- 正文语言由任务指定；导出外壳支持中文和英文，内置实验目前主要使用中文。
+- 制作规范要求资料检索和事实核查，但构建检查不能判断科学结论是否正确；最终内容仍需审阅，质量受模型、工具环境和输入材料影响。
 
-```json
-{
-  "topic": "my-topic",
-  "title": "教材标题",
-  "lang": "zh-CN",
-  "output": "my-topic.html",
-  "chapters": ["01-introduction.md"]
-}
-```
+仓库仅保存制作工作流与可复用代码。原始材料、内部记录、主题数据和生成教材保留在本地，**需要单独备份**。
 
-清单位于 `content/my-topic/manifest.json`；首次导入所需的章节放在同一目录。已有 HTML 的资源刷新仍需该主题清单，但不需要重新读取旧 Markdown。
+<!-- readme-section: documentation -->
+## 文档入口
 
-<!-- readme-section: authoring -->
-## 制作和编辑
-
-`scripts/build-standalone.mjs` 在构建期将 Markdown 转成静态语义化 HTML，渲染公式、代码高亮和实验初值，复用共享主题，并内联全部资源。运行时 JavaScript 只增强目录、复制与实验交互，不重建正文。制作规范见 `SKILL.md`，它与 `.agents/skills/dialogue-to-course/SKILL.md` 必须同步。
-
-```bash
-# 首次制作：提供清单及章节后，导出该主题
-pnpm run build:standalone my-topic
-
-# 已有 HTML：刷新内嵌资源，保留正文编辑
-pnpm run build:standalone my-topic
-
-# 处理 dist 中已有的全部主题
-pnpm run build:standalone --all
-
-# 显式重新从 Markdown 导入，替换正文（旧文件会备份）
-pnpm run build:standalone my-topic --from-markdown
-```
-
-不指定主题或使用 `--all` 时，导出器只处理 `dist/` 中已有主题；目录为空会提示准备本地数据并以非零退出码停止，不再回退到未随仓库提供的 `style-sample`。首次构建需显式指定已经准备好的主题。脚本也兼容旧示例中放在参数开头的 `--` 分隔符。
-
-`dist/<topic>.html` 是正文的**唯一权威版本**。可直接编辑标题、段落、列表、表格、代码与参考文献，保存后刷新浏览器即可。保留 `<!-- course:body:start -->` 和 `<!-- course:body:end -->` 标记。默认重新导出保留正文；`--from-markdown` 会替换正文，旧文件备份到 `internal/html-export-backups/`。
-
-修改公式的 `data-tex` 后，需要同步更新静态 SVG/MathML；仅修改 TeX 不会自动刷新公式显示。
-
-目录保留桌面左侧固定布局与窄屏顶部折叠布局，根据正文的 H2–H6 生成层级。父标题可跳转，箭头或键盘可展开小标题；新导出的目录使用原生 `details`，关闭 JavaScript 仍可展开。实验容器内部的标题不进目录；自定义实验请使用 `data-course-outline="exclude"`。直接编写 HTML 时，为正文标题设置稳定且唯一的 `id`。资源刷新保留已有正文，运行时会增强旧的平面目录以支持子标题。
-
-人工修订后的 HTML 继续作为唯一权威版本。后续追加时，读取当前文件，只在现有 `<article>` 的末尾、`</article>` 之前插入新内容；已有正文及人工修订保持原样，不重新排版或从旧 Markdown 重建。新增锚点避开所有已有 ID，目录仅追加新项目。除非明确要求修改既有内容，否则不改前面的章节。历史备份仅用于溯源，验收以当前 HTML 为基准，不要求与旧备份全文相同。
-
-首次从 Markdown 导入多个章节时，统一生成唯一标题锚点。资源校验解析 HTML 属性和 CSS，拒绝未内嵌的图片、样式及其他资源；普通参考文献链接可以保留。外部图片须先转换为 data URL，校验不会自动下载资源。
-
-Markdown 导入采用保守校验：原生 HTML 标签必须小写（例如 `<b>`，不能写 `<B>`），组件须来自白名单；正文中的 `<style>` 块会明确报错，请复用共享样式。代码块中的标签和样式示例不受此限制。每个公式在构建时校验 `data-tex` 注入与静态 SVG 的存在，输出结构不兼容会立即报错。
-
-<!-- readme-section: checks -->
-## 检查与本地网站构建
-
-```bash
-# 本地完整验收（无需教材数据）
-pnpm run verify
-
-# 导出回归：重复标题、资源检查、人工修订及末尾追加保留
-pnpm test
-
-# 准备好本地网站页面后，预览或构建 VitePress 网站
-pnpm run dev
-pnpm run build
-pnpm run preview
-
-# 使用已有 Playwright 和 Edge 验收独立 HTML
-node scripts/verify-native-html.mjs ./node_modules
-```
-
-数值自检验证整型边界、float32 特例、ABI 布局、地址计算与栈恢复。浏览器验收覆盖断网 `file://` 打开、外部请求、关闭 JavaScript 阅读、目录与交互、窄屏及编辑后重新导出。浏览器脚本逐一操作每个实验的滑块、下拉框、文本/数字输入和可用按钮。正文长度与公式数量的默认下限为 1 和 0，可在主题清单中设置 `"validation": { "minBodyLength": 5000, "minFormulas": 6 }`；不含实验的教材同样可验收。通用规则检查本地路径和私有材料链接；额外个人标识通过本地环境变量 `COURSE_PRIVATE_TERMS` 传入 JSON 字符串数组，不写入仓库。
-
-截图与结果写入 `internal/native-html-test/`。浏览器验收将当前 HTML 及清单复制到隔离夹具，在副本上验证追加与重新导出，进程中断也不会改动权威文件。临时夹具正常结束时自动清理，截图与报告保留；类型检查或构建成功不能代替实际浏览器验收。
-
-浏览器验收的路径参数须直接包含 `playwright/`，例如项目的 `./node_modules`；使用其他已有安装时传入它的 `node_modules` 绝对路径，而不是项目根目录。
-
-可选外壳回归使用 `node --test scripts/browser-shell.test.mjs`：先将环境变量 `COURSE_PLAYWRIGHT_DIR` 设置为已有安装的 `node_modules` 目录。它创建中英文隔离夹具，检查离线阅读、目录文案、自定义标签、组件白名单和通量图端点；未设置变量时跳过。结果保存在 `internal/test-feedback-browser/`。
-
-`pnpm run verify` 先检查两份 SKILL 逐字节一致、中英文 README 的章节标记与可执行示例一致（不自动判断翻译语义），再依次运行 Vue/TypeScript 类型检查、构建脚本 ESLint 检查、计算模型自检和构建契约/导出回归（含临时页面的网站构建）。全部通过才退出成功；提交前在本地运行即可，仓库保持仅提供本地制作、检查与构建，不启用 GitHub Actions。真实教材的浏览器验收需要已有 Edge 与 Playwright，单独执行。
-
-导出备份使用时间戳加随机后缀，避免同毫秒冲突；备份不会自动删除。可按保留需要定期人工归档 `internal/html-export-backups/`，确认恢复点后再删除旧副本。
-
-Git 忽略规则只约束当前与后续提交，不能撤回已公开的历史副本。历史清理需要私有备份和授权；本地重写完成不代表远端或他人克隆已同步清理。
-
-<!-- readme-section: delivery -->
-## 本地交付
-
-独立教材输出为 `dist/<topic>.html`，可直接编辑并离线使用。可选 VitePress 网站输出为 `docs/.vitepress/dist/`；本地构建路径通过环境变量 `SITE_BASE` 设置，域名根目录使用 `/`，子目录使用对应的路径。
-
-<!-- readme-section: layout -->
-## 目录结构
-
-```text
-.
-├─ .agents/skills/dialogue-to-course/SKILL.md
-├─ AGENTS.md、SKILL.md、README.md    # 项目指令、制作规范与说明
-├─ README.en.md                     # 英文说明（与本文互相引用）
-├─ content/README.md                # 本地教材数据的使用说明
-├─ docs/.vitepress/                 # 网站配置、共享主题与交互组件
-├─ standalone/                     # 单文件导出运行时与共享布局
-├─ scripts/                        # 构建与验收脚本
-├─ package.json、pnpm-lock.yaml、pnpm-workspace.yaml、tsconfig.json
-└─ LICENSE
-```
-
-主题数据、网站页面和资源、`dist/`、`sources/`、`internal/`、`.standalone/`、`node_modules/` 在本地按需创建或恢复，均不属于版本控制范围。
+| 文档 | 用途 |
+| --- | --- |
+| [AGENTS.md](AGENTS.md) | Agent 项目入口、正文保护和版本控制规则 |
+| [SKILL.md](SKILL.md) | 内容组织、资料核查、视觉与交付规范 |
+| [制作与构建指南](handbook/authoring.md) | 主题清单、首次导入、HTML 编辑、资源打包与网站模式 |
+| [维护与验证指南](handbook/maintenance.md) | 依赖约束、回归测试、浏览器验收与代码结构 |
+| [本地主题数据](content/README.md) | 主题文件的存放与恢复 |
 
 <!-- readme-section: license -->
 ## 许可
 
-[MIT](LICENSE)。公开教材引用已发表的资料，原始对话与私有核查记录保留在本地。本地交付前由用户完成最终审核。
+项目代码与规范采用 [MIT](LICENSE) 许可。输入材料和引用资源遵循各自的许可。

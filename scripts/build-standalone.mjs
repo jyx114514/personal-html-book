@@ -200,7 +200,11 @@ for (const topic of topics) {
   let previous
   try { previous = await readFile(target, 'utf8') } catch (error) { if (error.code !== 'ENOENT') throw error }
   const existingBody = previous?.match(/<!-- course:body:start -->(?:\r?\n)?([\s\S]*?)(?:\r?\n)?<!-- course:body:end -->/)
-  if (previous && !existingBody) fail('正文保护标记缺失或不完整：' + manifest.output + '；请恢复 course:body:start/end 标记后重试。')
+  if (previous !== undefined && (!existingBody ||
+    previous.split('<!-- course:body:start -->').length !== 2 ||
+    previous.split('<!-- course:body:end -->').length !== 2)) {
+    fail('正文保护标记缺失、重复或顺序错误：' + manifest.output + '；请恢复唯一且有序的 course:body:start/end 标记后重试。')
+  }
   let body, mathCss, title, lang
   if (existingBody && !fromMarkdown) {
     body = existingBody[1]
