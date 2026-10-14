@@ -56,7 +56,7 @@ https://jyx114514.github.io/personal-html-book/example.html
 
 https://jyx114514.github.io/personal-html-book/qpcr-ct-gpt6.1.html
 
-https://jyx114514.github.io/personal-html-book/re-qpcr-ct-deepseek4.1.html
+https://jyx114514.github.io/personal-html-book/rt-qpcr-ct-deepseek4.1.html
 
 
 ## 许可
