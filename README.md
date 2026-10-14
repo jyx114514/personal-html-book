@@ -47,6 +47,18 @@ pnpm run verify
 | [本地主题数据](content/README.md) | 主题文件的存放与恢复 |
 
 <!-- readme-section: license -->
+
+## 样式示例
+
+https://jyx114514.github.io/personal-html-book/example.html
+
+## 样式AB测（内容不同）
+
+https://jyx114514.github.io/personal-html-book/qpcr-ct-gpt6.1.html
+
+https://jyx114514.github.io/personal-html-book/re-qpcr-ct-deepseek4.1.html
+
+
 ## 许可
 
 项目代码与规范采用 [MIT](LICENSE) 许可。输入材料和引用资源遵循各自的许可。
