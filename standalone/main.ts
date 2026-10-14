@@ -1,5 +1,6 @@
 import { mountOutline } from '../docs/.vitepress/theme/outline'
 import { courseUi } from '../docs/.vitepress/theme/course-ui.mjs'
+import { mountDiagrams } from '../docs/.vitepress/theme/diagrams'
 import { createSSRApp } from 'vue'
 import GradientDemo from '../docs/.vitepress/theme/components/GradientDemo.vue'
 import OmicsLab from '../docs/.vitepress/theme/components/OmicsLab.vue'
@@ -20,6 +21,7 @@ for (const island of Array.from(document.querySelectorAll<HTMLElement>('[data-co
 }
 
 mountOutline(document)
+mountDiagrams(document)
 
 for (const button of Array.from(document.querySelectorAll<HTMLButtonElement>('button.copy'))) {
   button.type = 'button'

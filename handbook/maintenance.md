@@ -41,6 +41,8 @@ node scripts/verify-native-html.mjs ./node_modules
 
 可选外壳回归使用 `node --test scripts/browser-shell.test.mjs`：先将环境变量 `COURSE_PLAYWRIGHT_DIR` 设置为已有安装的 `node_modules` 目录。它创建中英文隔离夹具，检查离线阅读、目录文案、自定义标签、组件白名单和通量图端点；未设置变量时跳过。结果保存在 `internal/test-feedback-browser/`。
 
+原生图解浏览器回归使用 `node --test scripts/browser-diagrams.test.mjs`，同样需要 `COURSE_PLAYWRIGHT_DIR`。它实际构建制作手册中的 SVG 示例，检查断网打开、无 JavaScript 静态图、播放/暂停/继续/重置、键盘操作、多图隔离、减少动态效果、深色模式、320/390 像素窄屏及网站换页后的控件初始化。截图、演示 HTML 与报告保存在 `internal/native-diagram-test/`。常规导出回归同时检查 SVG 原样导入、重新打包保留，以及绘图属性与动画值中的外部资源引用。
+
 `pnpm run verify` 先检查两份 SKILL 逐字节一致、中英文 README 和 handbook 手册的章节标记与可执行示例一致（不自动判断翻译语义），再依次运行 Vue/TypeScript 类型检查、构建脚本 ESLint 检查、计算模型自检和构建契约/导出回归（含临时页面的网站构建）。全部通过才退出成功；提交前在本地运行即可，仓库保持仅提供本地制作、检查与构建，不启用 GitHub Actions。真实教材的浏览器验收需要已有 Edge 与 Playwright，单独执行。
 
 导出备份使用时间戳加随机后缀，避免同毫秒冲突；备份不会自动删除。可按保留需要定期人工归档 `internal/html-export-backups/`，确认恢复点后再删除旧副本。

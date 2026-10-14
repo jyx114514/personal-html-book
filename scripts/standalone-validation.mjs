@@ -56,7 +56,15 @@ export function assertStandaloneResources(html) {
       // cite is a bibliographic link, not an automatically loaded resource.
       for (const [name, value] of attrs) {
         if (name === 'style') checkCss(`element { ${value} }`, `${tag}[style]`)
-        else if (name === 'srcset' || name === 'imagesrcset') {
+        else if (node.ns === 1 && ['fill', 'stroke', 'filter', 'clip-path', 'mask', 'marker', 'marker-start', 'marker-mid', 'marker-end', 'cursor', 'color-profile'].includes(name)) {
+          checkCss(`element { ${name}: ${value} }`, `${tag}[${name}]`)
+        } else if (node.ns === 1 && ['animate', 'set'].includes(tag) &&
+          /^(?:href|xlink:href|src)$/i.test(attrs.get('attributename') ?? '') && ['from', 'to', 'by', 'values'].includes(name)) {
+          for (const reference of value.split(';')) assertInline(reference, `${tag}[${name}]`)
+        } else if (node.ns === 1 && ['animate', 'set'].includes(tag) &&
+          /^(?:fill|stroke|filter|clip-path|mask|marker(?:-start|-mid|-end)?|cursor|color-profile)$/i.test(attrs.get('attributename') ?? '') && ['from', 'to', 'by', 'values'].includes(name)) {
+          for (const item of value.split(';')) checkCss(`element { ${attrs.get('attributename')}: ${item} }`, `${tag}[${name}]`)
+        } else if (name === 'srcset' || name === 'imagesrcset') {
           // Whitespace ends a URL token; commas inside a data URL belong to it.
           let rest = value.trim()
           while (rest) {

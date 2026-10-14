@@ -65,6 +65,45 @@ When importing multiple chapters from Markdown for the first time, unique headin
 
 Markdown import uses conservative validation: native HTML tags must be lowercase (for example, `<b>` rather than `<B>`), and components must be allowlisted. A `<style>` block in the body causes an explicit error; reuse shared styles. Tag and style examples inside code fences remain allowed. Each formula is checked at build time for `data-tex` injection and a static SVG; incompatible output fails immediately.
 
+<!-- readme-section: diagrams -->
+## Native explanatory diagrams
+
+Use inline SVG in the body when relationships, processes, or changes benefit from a diagram; static drawings require no script. Geometry belongs in drawing attributes, colors use shared variables, and figures, captions, and buttons reuse existing styles without additional drawing libraries or dependencies. Each diagram needs a `viewBox`, an accessible name and description, and a caption. IDs must be unique throughout the HTML. Support quantitative values with evidence and identify conceptual simplifications. Split complex figures to keep labels readable on phones and in dark mode.
+
+The example stays still until the reader plays it, then moves a signal along a path; it supports pause, resume, and reset. Each `data-course-animation` region contains one SVG. All `animate`, `animateMotion`, `animateTransform`, and `set` elements must have `begin="indefinite"`; the shared native script starts them together. Unsupported structures or browsers leave the controls hidden. With JavaScript disabled, animations never start. Reduced motion hides the controls, and backgrounding the page pauses playback. Continuous demonstrations can use `repeatCount="indefinite"` with a fixed duration; after a finite animation ends, reset before playing again.
+
+```html
+<figure data-course-animation>
+  <svg id="signal-diagram" viewBox="0 0 360 120" role="img" aria-labelledby="signal-title" aria-describedby="signal-desc">
+    <title id="signal-title">Signal propagation along a path</title>
+    <desc id="signal-desc">A dot travels from input on the left to output on the right. The arrow shows direction. Schematic, not quantitative results.</desc>
+    <defs>
+      <marker id="signal-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M 0 0 L 10 5 L 0 10 Z" fill="var(--muted)"></path>
+      </marker>
+    </defs>
+    <path d="M 40 60 H 320" fill="none" stroke="var(--muted)" stroke-width="2" marker-end="url(#signal-arrow)"></path>
+    <circle cx="40" cy="60" r="9" fill="var(--accent)">
+      <animate attributeName="cx" from="40" to="320" dur="4s" begin="indefinite" repeatCount="indefinite"></animate>
+    </circle>
+    <text x="40" y="100" text-anchor="middle" font-size="24" fill="var(--ink)">Input</text>
+    <text x="320" y="100" text-anchor="middle" font-size="24" fill="var(--ink)">Output</text>
+  </svg>
+  <div data-course-animation-controls hidden>
+    <button class="reset" type="button" data-course-animation-play aria-controls="signal-diagram">Play / Resume</button>
+    <button class="reset" type="button" data-course-animation-pause aria-controls="signal-diagram" disabled>Pause</button>
+    <button class="reset" type="button" data-course-animation-reset aria-controls="signal-diagram">Reset</button>
+  </div>
+  <figcaption>Read left to right: input → propagation → output. The dot represents a signal and the arrow its direction. Schematic, not quantitative results; the 4-second cycle is only for observation.</figcaption>
+</figure>
+```
+
+For a static diagram, remove `animate`, the controls, and `data-course-animation`, keeping the SVG and caption. Static attributes must match animation starting values; explain essential steps and conclusions in prose or static panels as well. More complex parameter demonstrations can use native JavaScript inside an isolated region. Canvas drawings require a static SVG/table and a textual alternative.
+
+SVG `<use>`, `<image>`, and drawing attributes may only reference embedded resources. Arrows, gradients, and filters use `#id` / `url(#id)` within the file, never external SVG files. Resource validation also checks animated changes to links, fill, filters, and related properties; it does not download resources. Default repackaging preserves SVG and captions verbatim. Adding diagrams to an existing textbook still means appending only at the end of its current `<article>`.
+
+Browser verification covers initial drawings, actual movement, pause/resume/reset, keyboard controls, JavaScript disabled, reduced motion, offline requests, dark mode, and narrow screens. Implementation references: [SVG animation controls](https://developer.mozilla.org/en-US/docs/Web/API/SVGSVGElement), [starting an animation](https://developer.mozilla.org/en-US/docs/Web/API/SVGAnimationElement/beginElement), and [SVG local and resource references](https://developer.mozilla.org/en-US/docs/Web/SVG/Guides/Linking).
+
 <!-- readme-section: language -->
 ## Output language
 

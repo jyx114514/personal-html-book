@@ -65,6 +65,45 @@ pnpm run build:standalone my-topic --from-markdown
 
 Markdown 导入采用保守校验：原生 HTML 标签必须小写（例如 `<b>`，不能写 `<B>`），组件须来自白名单；正文中的 `<style>` 块会明确报错，请复用共享样式。代码块中的标签和样式示例不受此限制。每个公式在构建时校验 `data-tex` 注入与静态 SVG 的存在，输出结构不兼容会立即报错。
 
+<!-- readme-section: diagrams -->
+## 原生讲解图片
+
+在关系、流程或变化过程需要图解时，优先直接在正文中绘制内嵌 SVG；静态图无需脚本。图形属性负责几何布局，配色使用共享变量，图框、图注和按钮复用已有样式，不引入额外绘图库或依赖。每张图提供 `viewBox`、可访问名称与描述、图注，整份 HTML 的 ID 必须唯一。坐标与数值需有依据，概念示意图说明简化与非定量性质。复杂图可拆分，确保手机与深色模式可读。
+
+下面的图默认静止，读者点击播放后展示信号沿路径移动；可暂停、继续、重置。`data-course-animation` 区域只放一个 SVG；所有 `animate`、`animateMotion`、`animateTransform` 和 `set` 必须用 `begin="indefinite"`，由共享原生脚本同时开始。不支持该结构或 SVG 动画时，控件保持隐藏。关闭 JavaScript 时动画不启动，系统要求减少动态效果时隐藏控件；页面进入后台时自动暂停。连续演示可以使用 `repeatCount="indefinite"`，设置固定周期；有限动画结束后可点击重置再播放。
+
+```html
+<figure data-course-animation>
+  <svg id="signal-diagram" viewBox="0 0 360 120" role="img" aria-labelledby="signal-title" aria-describedby="signal-desc">
+    <title id="signal-title">信号沿路径传播</title>
+    <desc id="signal-desc">圆点从左侧输入移向右侧输出，箭头表示传播方向。示意，非定量结果。</desc>
+    <defs>
+      <marker id="signal-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M 0 0 L 10 5 L 0 10 Z" fill="var(--muted)"></path>
+      </marker>
+    </defs>
+    <path d="M 40 60 H 320" fill="none" stroke="var(--muted)" stroke-width="2" marker-end="url(#signal-arrow)"></path>
+    <circle cx="40" cy="60" r="9" fill="var(--accent)">
+      <animate attributeName="cx" from="40" to="320" dur="4s" begin="indefinite" repeatCount="indefinite"></animate>
+    </circle>
+    <text x="40" y="100" text-anchor="middle" font-size="24" fill="var(--ink)">输入</text>
+    <text x="320" y="100" text-anchor="middle" font-size="24" fill="var(--ink)">输出</text>
+  </svg>
+  <div data-course-animation-controls hidden>
+    <button class="reset" type="button" data-course-animation-play aria-controls="signal-diagram">播放 / 继续</button>
+    <button class="reset" type="button" data-course-animation-pause aria-controls="signal-diagram" disabled>暂停</button>
+    <button class="reset" type="button" data-course-animation-reset aria-controls="signal-diagram">重置</button>
+  </div>
+  <figcaption>从左向右读：输入 → 传播 → 输出。圆点表示信号，箭头表示方向；示意，非定量结果，4 秒周期仅为方便观察。</figcaption>
+</figure>
+```
+
+只需要静态图时，移除示例中的 `animate`、控件和 `data-course-animation` 属性，保留 SVG 与图注。动画起点与静态属性保持一致；过程中的关键步骤和结论需同时用文字或静态分步图说明。更复杂的参数演示可以在独立区域使用原生 JavaScript；Canvas 绘图需提供静态 SVG/表格和文字替代。
+
+SVG 的 `<use>`、`<image>` 和绘图属性只能引用内嵌资源；箭头、渐变、滤镜等使用当前文件中的 `#id` / `url(#id)`，不得引用外部 SVG 文件。资源校验也检查动画对链接、填充和滤镜等属性的修改，不会自动下载资源。默认重新打包原样保留 SVG 和图注；在已有教材中追加图解仍只追加到当前 `<article>` 末尾。
+
+浏览器验收时，检查初始图、播放后的实际变化、暂停与继续、重置、键盘操作、关闭 JavaScript、减少动态效果、离线资源请求、深色模式和窄屏布局。实现参考：[SVG 动画控制](https://developer.mozilla.org/en-US/docs/Web/API/SVGSVGElement)、[启动动画](https://developer.mozilla.org/en-US/docs/Web/API/SVGAnimationElement/beginElement)、[SVG 本地与资源引用](https://developer.mozilla.org/en-US/docs/Web/SVG/Guides/Linking)。
+
 <!-- readme-section: language -->
 ## 语言
 

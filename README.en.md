@@ -26,6 +26,7 @@ A fresh clone contains no sample textbooks or topic data. The agent prepares a t
 ## Output and limitations
 
 - A consistent academic layout with formulas, code, tables, references, and interactive experiments where useful.
+- Static diagrams and animated explanations where useful, drawn with inline SVG or other native browser features; play, pause, and reset without extra drawing dependencies.
 - Body text stored directly in editable HTML; static content remains readable with JavaScript disabled.
 - The task determines the body language. The export shell supports Chinese and English; built-in experiments currently use mostly Chinese.
 - Authoring rules require research and fact checking, but build checks cannot establish scientific correctness. Review the final content; quality depends on the model, tool environment, and input material.

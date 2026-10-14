@@ -17,6 +17,13 @@ test('resource validation rejects external HTML/CSS resources regardless of quot
     `<style>p{background:image-set('figure.png' 1x)}</style>`,
     '<img srcset="data:image/png;base64,AAAA 1x, figure.png 2x">',
     '<svg><image href="figure.svg"/></svg>', '<video poster=figure.png></video>',
+    '<svg><path marker-end="url(arrows.svg#tip)"/></svg>',
+    '<svg><rect fill="url(gradient.svg#paint)"/></svg>',
+    '<svg><g clip-path="url(clips.svg#shape)"/></svg>',
+    '<svg><g filter="url(filters.svg#blur)"/></svg>',
+    '<svg><use xlink:href="icons.svg#dot"/></svg>',
+    '<svg><image><animate attributeName="href" values="#local;remote.svg"/></image></svg>',
+    '<svg><path><set attributeName="marker-end" to="url(remote.svg#tip)"/></path></svg>',
     '<link href=theme.css rel=stylesheet>', '<script src=app.js></script>',
     '<iframe srcdoc="remote content"></iframe>',
   ]
@@ -24,6 +31,8 @@ test('resource validation rejects external HTML/CSS resources regardless of quot
   assertStandaloneResources(`<a href="https://example.org/paper">Reference</a>
     <img src='data:image/png;base64,AAAA' srcset="data:image/png;base64,AAAA 1x, data:image/png;base64,BBBB 2x">
     <svg><use xlink:href="#glyph"/></svg>
+    <svg><path marker-end="url(#tip)" fill="var(--accent)" stroke="currentColor"/><g clip-path="url(#clip)"/>
+      <circle><animate attributeName="fill" values="var(--accent);var(--accent-2)"/></circle></svg>
     <div style="background:url('data:image/png;base64,AAAA')"></div>
     <style>p{filter:url(#filter)}</style>
     <pre>&lt;img src="example.png"&gt;</pre>
@@ -36,14 +45,18 @@ test('real exporter assigns book-wide anchors and preserves human revisions and 
   assert.throws(() => execFileSync(process.execPath, ['scripts/verify-native-html.mjs'], { cwd: fixture, stdio: 'pipe' }), error => /未找到 dist/.test(String(error.stderr)) && !/ENOENT/.test(String(error.stderr)))
   assert.throws(() => execFileSync(process.execPath, ['scripts/build-standalone.mjs', '--all'], { cwd: fixture, stdio: 'pipe' }), error => /没有已有主题/.test(String(error.stderr)))
   const source = path.join(fixture, 'content', 'regression')
+  const guide = await readFile(new URL('../handbook/authoring.md', import.meta.url), 'utf8')
+  const diagram = guide.match(/```html\r?\n(<figure data-course-animation>[\s\S]*?)\r?\n```/)[1]
   await mkdir(source, { recursive: true })
   await writeFile(path.join(source, 'manifest.json'), JSON.stringify({ topic: 'regression', title: 'Regression', output: 'regression.html', chapters: ['one.md', 'two.md'] }))
   await writeFile(path.join(source, 'one.md'), '## Summary\n\nFirst chapter.\n\n### Mechanism\n\nDetail.\n\n#### Edge case\n\nDeeper detail.\n\n<section class="explorer"><h3 id="lab-silent">Not a chapter</h3><p>Experiment.</p></section>\n\n$x^2$\n\n$$\nx < y\n$$\n')
-  await writeFile(path.join(source, 'two.md'), '## Summary\n\nSecond chapter.\n\n$x^3$\n')
+  await writeFile(path.join(source, 'two.md'), '## Summary\n\nSecond chapter.\n\n$x^3$\n\n' + diagram + '\n')
   const build = (...args) => execFileSync(process.execPath, ['scripts/build-standalone.mjs', ...(args.length ? args : ['regression'])], { cwd: fixture, stdio: 'pipe' })
   build()
   const target = path.join(fixture, 'dist', 'regression.html')
   const original = await readFile(target, 'utf8')
+  assert.ok(original.includes(diagram), 'Exporter must preserve the documented native SVG example')
+  assert.match(original, /data-course-animation-controls hidden/)
   assert.throws(() => execFileSync(process.execPath, ['scripts/verify-native-html.mjs', '.'], { cwd: fixture, stdio: 'pipe' }), error => /直接包含 playwright\/ 的 node_modules 目录/.test(String(error.stderr)))
   assert.equal([...original.matchAll(/<mjx-container data-tex=/g)].length, 3, 'Every inline and block formula needs source TeX')
   assert.match(original, /data-tex="x &lt; y\n"/)
