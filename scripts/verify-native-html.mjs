@@ -6,8 +6,11 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 
 import { createFixture } from './test-fixture.mjs'
 import { browserRuntime, launchBrowser } from './browser-runtime.mjs'
+import { extractInteractionScript, parsePrivateTerms } from './verification-inputs.mjs'
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 function fail(message) { console.error('浏览器验收失败：' + message); process.exit(1) }
+let forbidden
+try { forbidden = parsePrivateTerms(process.env.COURSE_PRIVATE_TERMS) } catch (error) { fail(error.message) }
 let names
 try { names = (await readdir(path.join(root, 'dist'))).filter(name => name.endsWith('.html')) }
 catch (error) { if (error.code === 'ENOENT') fail('未找到 dist/；请先构建至少一个独立 HTML。'); throw error }
@@ -32,6 +35,7 @@ try {
     const topic = name.slice(0, -5)
     const originalPath = path.join(root, 'dist', name)
     const original = await readFile(originalPath, 'utf8')
+    const js = extractInteractionScript(original, name)
     assert.ok(extractBody(original) !== undefined, 'Missing editable body markers')
     const manifest = JSON.parse(await readFile(path.join(root, 'content', topic, 'manifest.json'), 'utf8'))
     const validation = { minBodyLength: 1, minFormulas: 0, ...(manifest.validation ?? {}) }
@@ -67,14 +71,11 @@ try {
     const staticBody = extractBody(original)
     assert.match(staticBody, /<article class="vp-doc">/)
     assert.match(staticBody, /<p>/)
-    const js = original.match(/<script id="course-interactions">([\s\S]*?)<\/script>/)[1]
     const prose = await page.locator('article > p, article > section > p').allTextContents()
     for (const text of prose.filter(text => text.trim().length >= 80)) assert.ok(!js.includes(text.trim()), 'Article prose embedded in runtime')
     assert.doesNotMatch(original, /chatgpt\.com\/share|sources[\/\\]|internal[\/\\]|\b[a-z]:[\/\\]|turn\d+(search|view)/i)
 
     assert.doesNotMatch(original, /(?:\/home\/|\/Users\/)[^\s<>/]+\//)
-    const forbidden = process.env.COURSE_PRIVATE_TERMS ? JSON.parse(process.env.COURSE_PRIVATE_TERMS) : []
-    assert.ok(Array.isArray(forbidden) && forbidden.every(term => typeof term === 'string' && term.length > 0), 'COURSE_PRIVATE_TERMS must be a JSON string array')
     for (const term of forbidden) assert.ok(!original.includes(term), 'Private term found in HTML')
 
     // The current HTML includes human revisions. Historical backups are provenance only.

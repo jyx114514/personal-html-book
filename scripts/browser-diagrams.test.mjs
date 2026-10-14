@@ -7,6 +7,7 @@ import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { createFixture } from './test-fixture.mjs'
 import { browserRuntime, launchBrowser } from './browser-runtime.mjs'
+import { extractDiagramExample, stripDiagramAnimation } from './verification-inputs.mjs'
 
 const root = fileURLToPath(new URL('../', import.meta.url))
 test('native SVG diagrams work offline, without JS, with reduced motion, and across site routes', async t => {
@@ -20,8 +21,8 @@ test('native SVG diagrams work offline, without JS, with reduced motion, and acr
     await cleanup()
   })
   const guide = await readFile(path.join(root, 'handbook/authoring.md'), 'utf8')
-  const diagram = guide.match(/```html\r?\n(<figure data-course-animation>[\s\S]*?)\r?\n```/)[1]
-  const staticDiagram = diagram.replace(' data-course-animation', '').replace(/^ +<animate\b[^\r\n]*<\/animate>\r?\n/m, '').replace(/  <div data-course-animation-controls[\s\S]*?<\/div>\r?\n/, '').replaceAll('signal-', 'static-')
+  const diagram = extractDiagramExample(guide)
+  const staticDiagram = stripDiagramAnimation(diagram).replaceAll('signal-', 'static-')
   const secondDiagram = diagram.replaceAll('signal-', 'second-')
   const source = '# Native diagrams\n\n## Signal\n\nStatic explanation.\n\n' + diagram + '\n\n' + secondDiagram + '\n\n' + staticDiagram
   const content = path.join(fixture, 'content/diagrams')

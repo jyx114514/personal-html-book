@@ -5,6 +5,7 @@ import { mkdir, readFile, writeFile, readdir } from 'node:fs/promises'
 import { execFileSync } from 'node:child_process'
 import path from 'node:path'
 import { assertStandaloneResources } from './standalone-validation.mjs'
+import { extractDiagramExample } from './verification-inputs.mjs'
 
 test('resource validation rejects external HTML/CSS resources regardless of quoting', () => {
   const external = [
@@ -46,7 +47,7 @@ test('real exporter assigns book-wide anchors and preserves human revisions and 
   assert.throws(() => execFileSync(process.execPath, ['scripts/build-standalone.mjs', '--all'], { cwd: fixture, stdio: 'pipe' }), error => /没有已有主题/.test(String(error.stderr)))
   const source = path.join(fixture, 'content', 'regression')
   const guide = await readFile(new URL('../handbook/authoring.md', import.meta.url), 'utf8')
-  const diagram = guide.match(/```html\r?\n(<figure data-course-animation>[\s\S]*?)\r?\n```/)[1]
+  const diagram = extractDiagramExample(guide)
   await mkdir(source, { recursive: true })
   await writeFile(path.join(source, 'manifest.json'), JSON.stringify({ topic: 'regression', title: 'Regression', output: 'regression.html', chapters: ['one.md', 'two.md'] }))
   await writeFile(path.join(source, 'one.md'), '## Summary\n\nFirst chapter.\n\n### Mechanism\n\nDetail.\n\n#### Edge case\n\nDeeper detail.\n\n<section class="explorer"><h3 id="lab-silent">Not a chapter</h3><p>Experiment.</p></section>\n\n$x^2$\n\n$$\nx < y\n$$\n')
@@ -81,7 +82,11 @@ test('real exporter assigns book-wide anchors and preserves human revisions and 
   await writeFile(path.join(fixture, 'internal/html-export-backups/legacy/regression.html'), '<article>Obsolete content</article>')
   build()
   const refreshed = await readFile(target, 'utf8')
-  const body = html => html.match(/<!-- course:body:start -->\r?\n([\s\S]*?)\r?\n<!-- course:body:end -->/)[1]
+  const body = html => {
+    const match = html.match(/<!-- course:body:start -->\r?\n([\s\S]*?)\r?\n<!-- course:body:end -->/)
+    assert.ok(match, '导出回归 HTML 缺少 course:body:start/end 正文保护标记')
+    return match[1]
+  }
   assert.equal(body(refreshed), body(appended), 'Resource refresh changed revised or appended body')
   const invalid = refreshed.replace('</article>', "<img src='missing.png'></article>")
   await writeFile(target, invalid)
