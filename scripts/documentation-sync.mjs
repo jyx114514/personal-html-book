@@ -28,10 +28,26 @@ export function assertDocumentationCopies(skill, localSkill, chinese, english) {
   assert.deepEqual(readmeContract(chinese, 'README.md'), readmeContract(english, 'README.en.md'), 'README 中英文章节结构或可执行示例不同步（翻译语义仍需人工核对）')
 }
 
+export function renderAgentInstructions(skill) {
+  const source = skill.toString().replace(/\r\n/g, '\n')
+  const start = '<!-- agent-entry:start -->', end = '<!-- agent-entry:end -->'
+  assert.equal(source.split(start).length, 2, 'SKILL.md 必须有唯一的 agent-entry:start 标记')
+  assert.equal(source.split(end).length, 2, 'SKILL.md 必须有唯一的 agent-entry:end 标记')
+  assert.ok(source.indexOf(start) < source.indexOf(end), 'agent-entry 标记顺序错误')
+  const entry = source.slice(source.indexOf(start) + start.length, source.indexOf(end)).trim()
+  assert.ok(entry.startsWith('# Agent 项目指令\n'), 'Agent 入口必须包含项目标题')
+  return entry + '\n'
+}
+
+export function assertAgentInstructions(skill, agents) {
+  assert.equal(agents.toString().replace(/\r\n/g, '\n'), renderAgentInstructions(skill), 'AGENTS.md 偏离 SKILL.md 唯一规范源；请修改根目录 SKILL.md 后运行 pnpm run sync:agents')
+}
+
 export async function assertDocumentationSync(root) {
-  const files = ['SKILL.md', '.agents/skills/dialogue-to-course/SKILL.md', 'README.md', 'README.en.md']
-  const [skill, localSkill, chinese, english] = await Promise.all(files.map(file => readFile(path.join(root, file))))
+  const files = ['SKILL.md', '.agents/skills/dialogue-to-course/SKILL.md', 'README.md', 'README.en.md', 'AGENTS.md']
+  const [skill, localSkill, chinese, english, agents] = await Promise.all(files.map(file => readFile(path.join(root, file))))
   assertDocumentationCopies(skill, localSkill, chinese.toString('utf8'), english.toString('utf8'))
+  assertAgentInstructions(skill, agents)
   for (const guide of ['authoring', 'maintenance']) {
     const names = [`handbook/${guide}.md`, `handbook/${guide}.en.md`]
     const copies = await Promise.all(names.map(file => readFile(path.join(root, file), 'utf8')))

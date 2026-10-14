@@ -20,6 +20,8 @@ pnpm install --frozen-lockfile
 pnpm run verify
 ```
 
+`verify` 现在必须通过离线浏览器夹具回归，不能只凭类型检查或构建通过。Playwright 已列入开发依赖；Windows 默认使用已有 Microsoft Edge，其他系统默认使用已安装的 Playwright Chromium。浏览器准备与失败处理见[维护指南](handbook/maintenance.md)。`verify:static` 仅用于静态排查，不能证明离线可用；具体教材构建后还需运行 `pnpm run verify:html` 验收当前文件。
+
 新克隆不包含教材示例或主题数据；agent 按[制作与构建指南](handbook/authoring.md)准备主题后，输出到 `dist/<topic>.html`，可直接用浏览器打开。后续修订或追加时，把当前 HTML 交给 agent；它是正文的权威版本。
 
 <!-- readme-section: output -->
@@ -38,7 +40,7 @@ pnpm run verify
 
 | 文档 | 用途 |
 | --- | --- |
-| [AGENTS.md](AGENTS.md) | Agent 项目入口、正文保护和版本控制规则 |
+| [AGENTS.md](AGENTS.md) | 从 SKILL 生成的 Agent 项目入口与规范导航 |
 | [SKILL.md](SKILL.md) | 内容组织、资料核查、视觉与交付规范 |
 | [制作与构建指南](handbook/authoring.md) | 主题清单、首次导入、HTML 编辑、资源打包与网站模式 |
 | [维护与验证指南](handbook/maintenance.md) | 依赖约束、回归测试、浏览器验收与代码结构 |

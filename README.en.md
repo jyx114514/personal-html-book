@@ -20,6 +20,8 @@ pnpm install --frozen-lockfile
 pnpm run verify
 ```
 
+`verify` now requires offline browser fixture regression; a passing typecheck or build alone is insufficient. Playwright is a dev dependency. Windows uses existing Microsoft Edge by default; other platforms use installed Playwright Chromium. See the [maintenance guide](handbook/maintenance.en.md) for browser setup and failure handling. `verify:static` is only for static diagnosis and does not establish offline usability. After building a real textbook, also run `pnpm run verify:html` against the current files.
+
 A fresh clone contains no sample textbooks or topic data. The agent prepares a topic using the [authoring and build guide](handbook/authoring.en.md), then outputs `dist/<topic>.html`, which opens directly in a browser. For revisions or additions, give the agent the current HTML: it is the authoritative body.
 
 <!-- readme-section: output -->
@@ -38,7 +40,7 @@ The repository stores only the authoring workflow and reusable code. Source mate
 
 | Document | Purpose |
 | --- | --- |
-| [AGENTS.md](AGENTS.md) | Agent entry point, body preservation, and version control rules (Chinese) |
+| [AGENTS.md](AGENTS.md) | Generated Agent entry point and rule navigation from SKILL (Chinese) |
 | [SKILL.md](SKILL.md) | Content structure, source checking, visual and delivery rules (Chinese) |
 | [Authoring and build guide](handbook/authoring.en.md) | Manifests, first import, HTML editing, asset packaging, and site mode |
 | [Maintenance and verification guide](handbook/maintenance.en.md) | Dependency constraints, regression tests, browser checks, and code layout |

@@ -12,6 +12,8 @@ pnpm install --frozen-lockfile
 pnpm run verify
 ```
 
+Full workflow verification requires offline browser fixtures; see the [maintenance guide](maintenance.en.md) for browser setup. Only `verify:static` avoids launching a browser, and it does not establish offline acceptance. After building a real textbook, run `pnpm run verify:html`; passing fixtures does not replace verification of the current deliverable.
+
 A fresh clone contains no textbook data. Before building, prepare or restore locally:
 
 1. `content/<topic>/manifest.json` — topic metadata.
@@ -35,7 +37,7 @@ The manifest lives at `content/my-topic/manifest.json`; chapters needed for the 
 <!-- readme-section: authoring -->
 ## Authoring and editing
 
-`scripts/build-standalone.mjs` converts Markdown into static semantic HTML at build time, rendering formulas, code highlighting, and experiment initial values, reusing the shared theme and inlining every asset. Runtime JavaScript only enhances the outline, copy buttons, and experiment interaction — it never rebuilds the body. Authoring conventions live in [SKILL.md](../SKILL.md), which must stay in sync with `.agents/skills/dialogue-to-course/SKILL.md`.
+`scripts/build-standalone.mjs` converts Markdown into static semantic HTML at build time, rendering formulas, code highlighting, and experiment initial values, reusing the shared theme and inlining every asset. Runtime JavaScript only enhances the outline, copy buttons, and experiment interaction — it never rebuilds the body. The root [SKILL.md](../SKILL.md) is the sole editable source of authoring conventions. After editing it, run `pnpm run sync:agents` to generate `AGENTS.md` and synchronize `.agents/skills/dialogue-to-course/SKILL.md`; verification rejects drift.
 
 ```bash
 # First build: after supplying the manifest and chapters, export the topic

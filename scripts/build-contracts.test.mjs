@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { renderMathWithTex } from './standalone-math.mjs'
-import { assertDocumentationCopies } from './documentation-sync.mjs'
+import { assertDocumentationCopies, assertAgentInstructions, renderAgentInstructions } from './documentation-sync.mjs'
 
 test('formula source injection fails immediately if upstream removes or duplicates the container/SVG', () => {
   const html = '<mjx-container><svg></svg></mjx-container><style>.MathJax{color:inherit}</style>'
@@ -22,4 +22,16 @@ test('documentation drift fails verification while translated prose and comments
   assert.throws(() => assertDocumentationCopies('rules', 'rules', zh, en.replace('checks', 'other')), /不同步/)
   assert.throws(() => assertDocumentationCopies('rules', 'rules', zh, en.replace('pnpm run verify', 'pnpm run build')), /不同步/)
   assert.throws(() => assertDocumentationCopies('rules', 'rules', zh, en + '\n## New section\n'), /标记/)
+})
+
+test('agent instructions are generated from one source and drift or malformed boundaries fail', () => {
+  const skill = 'Other rules\n<!-- agent-entry:start -->\n# Agent 项目指令\n\nRead SKILL.md.\n<!-- agent-entry:end -->\n'
+  const agents = renderAgentInstructions(skill)
+  assertAgentInstructions(skill, agents)
+  assertAgentInstructions(skill, agents.replaceAll('\n', '\r\n'))
+  assert.throws(() => assertAgentInstructions(skill, agents.replace('Read', 'Ignore')), /偏离/)
+  assert.throws(() => assertAgentInstructions(skill.replace('Read', 'Follow'), agents), /偏离/)
+  for (const malformed of [skill.replace('<!-- agent-entry:end -->', ''), skill + '<!-- agent-entry:start -->', skill.replace(/agent-entry:(start|end)/g, (_, side) => 'agent-entry:' + (side === 'start' ? 'end' : 'start'))]) {
+    assert.throws(() => renderAgentInstructions(malformed), /标记/)
+  }
 })

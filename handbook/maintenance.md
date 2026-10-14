@@ -10,40 +10,64 @@ README 只放项目定位、使用入口、能力边界与文档导航。制作�
 - Node.js ≥ 22.13。
 - 数学插件使用 `markdown-it-mathjax3@^4.3.2`，与 VitePress 1.6 的 `^4` peer 范围对齐；不要单独升级到 v5。
 - pnpm ≥ 10.26 且 < 11；项目通过 `packageManager` 固定为 10.26.0，`allowBuilds` 从该版本起受支持（[官方说明](https://github.com/pnpm/pnpm.io/blob/main/blog/releases/10.26.md)）。使用仓库中的 `pnpm-lock.yaml` 锁定依赖。
-- 浏览器验收另需 Microsoft Edge 和已有的 Playwright 安装；验收脚本不会安装依赖。
+- Playwright 及 Vue/TypeScript 的 ESLint 插件与解析器已列入并锁定开发依赖，随 `pnpm install --frozen-lockfile` 安装。
+- 浏览器二进制独立于 npm 依赖：Windows 默认使用已有 Microsoft Edge，其他系统默认使用 Playwright Chromium。验收脚本不会静默安装浏览器，缺失时非零退出。可显式执行 `pnpm exec playwright install chromium` 后设置 `COURSE_BROWSER_CHANNEL=chromium`；这只安装测试浏览器，不替换系统 Edge。支持的通道为 `msedge`、`chrome`、`chromium`。
 
-Playwright 未列入项目依赖，不应假定本项目的 node_modules 中已经包含它。
+默认读取本项目 `node_modules/playwright`，不再要求外部安装。仍可通过 `COURSE_PLAYWRIGHT_DIR` 指向直接包含 `playwright/` 的已有 `node_modules` 目录。浏览器设置参考 [Playwright 官方文档](https://playwright.dev/docs/browsers)。Windows PowerShell 示例：`$env:COURSE_BROWSER_CHANNEL='chromium'`；Bash 使用 `export COURSE_BROWSER_CHANNEL=chromium`。验收环境缺失不能用跳过测试换取“全部通过”。
 
 <!-- readme-section: checks -->
 ## 检查与本地网站构建
 
 ```bash
-# 本地完整验收（无需教材数据）
+# 本地完整验收（无需教材数据；必须有可启动的浏览器）
 pnpm run verify
 
-# 导出回归：重复标题、资源检查、人工修订及末尾追加保留
+# 仅静态排查，不代表离线可用
+pnpm run verify:static
+
+# 单独运行强制浏览器夹具回归
+pnpm run verify:browser
+
+# 全部单元与浏览器回归
 pnpm test
+
+# 全范围 lint（包括 Vue、TypeScript 与浏览器运行时）
+pnpm run lint
+
+# 规范修改后生成 AGENTS 并同步 Skill 副本
+pnpm run sync:agents
 
 # 准备好本地网站页面后，预览或构建 VitePress 网站
 pnpm run dev
 pnpm run build
 pnpm run preview
 
-# 使用已有 Playwright 和 Edge 验收独立 HTML
-node scripts/verify-native-html.mjs ./node_modules
+# 对已构建的当前独立 HTML 做交付验收
+pnpm run verify:html
 ```
+
+| 入口 | 覆盖范围 | 能证明什么 |
+| --- | --- | --- |
+| `verify:static` | 文档同步、类型、全范围 lint、模型自检、导出和网站隔离构建 | 静态检查与构建通过；尚未验证离线可用 |
+| `verify:browser` | 中英文外壳和 SVG 夹具，真实断网 `file://`、请求监控、禁用 JS、交互与窄屏 | 导出工作流的浏览器回归通过，不代表任意教材已达标 |
+| `verify` | 以上两层全部必过；缺浏览器即失败 | 工作流完整本地验收通过 |
+| `verify:html` | 本地 `dist/` 中全部当前 HTML 及清单，逐份复制隔离验收 | 报告中列出的当前教材通过自动交付检查；科学内容仍需审阅 |
 
 数值自检验证整型边界、float32 特例、ABI 布局、地址计算与栈恢复。浏览器验收覆盖断网 `file://` 打开、外部请求、关闭 JavaScript 阅读、目录与交互、窄屏及编辑后重新导出。浏览器脚本逐一操作每个实验的滑块、下拉框、文本/数字输入和可用按钮。正文长度与公式数量的默认下限为 1 和 0，可在主题清单中设置 `"validation": { "minBodyLength": 5000, "minFormulas": 6 }`；不含实验的教材同样可验收。通用规则检查本地路径和私有材料链接；额外个人标识通过本地环境变量 `COURSE_PRIVATE_TERMS` 传入 JSON 字符串数组，不写入仓库。
 
 截图与结果写入 `internal/native-html-test/`。浏览器验收将当前 HTML 及清单复制到隔离夹具，在副本上验证追加与重新导出，进程中断也不会改动权威文件。临时夹具正常结束时自动清理，截图与报告保留；类型检查或构建成功不能代替实际浏览器验收。
 
-浏览器验收的路径参数须直接包含 `playwright/`，例如项目的 `./node_modules`；使用其他已有安装时传入它的 `node_modules` 绝对路径，而不是项目根目录。
+`verify:html` 默认使用项目依赖；兼容命令 `node scripts/verify-native-html.mjs <node_modules路径>` 的可选参数须直接包含 `playwright/`。缺少教材、清单、Playwright 或可用浏览器均以非零退出码停止，不产生验收成功报告。无 JavaScript 上下文同样监控资源请求，避免静态分支遗漏外部资源。
 
-可选外壳回归使用 `node --test scripts/browser-shell.test.mjs`：先将环境变量 `COURSE_PLAYWRIGHT_DIR` 设置为已有安装的 `node_modules` 目录。它创建中英文隔离夹具，检查离线阅读、目录文案、自定义标签、组件白名单和通量图端点；未设置变量时跳过。结果保存在 `internal/test-feedback-browser/`。
+外壳回归使用 `node --test scripts/browser-shell.test.mjs`，已纳入默认 `verify` 的必过项，不会因未设置 `COURSE_PLAYWRIGHT_DIR` 而跳过。它创建中英文隔离夹具，调用实际交付验收器检查离线阅读、无外部请求、禁用 JS、正文保留，并检查目录文案、自定义标签、组件白名单和通量图端点。结果保存在 `internal/test-feedback-browser/`。
 
-原生图解浏览器回归使用 `node --test scripts/browser-diagrams.test.mjs`，同样需要 `COURSE_PLAYWRIGHT_DIR`。它实际构建制作手册中的 SVG 示例，检查断网打开、无 JavaScript 静态图、播放/暂停/继续/重置、键盘操作、多图隔离、减少动态效果、深色模式、320/390 像素窄屏及网站换页后的控件初始化。截图、演示 HTML 与报告保存在 `internal/native-diagram-test/`。常规导出回归同时检查 SVG 原样导入、重新打包保留，以及绘图属性与动画值中的外部资源引用。
+原生图解浏览器回归使用 `node --test scripts/browser-diagrams.test.mjs`，同样是默认 `verify` 的必过项。它实际构建制作手册中的 SVG 示例，检查断网打开、无 JavaScript 静态图、播放/暂停/继续/重置、键盘操作、多图隔离、减少动态效果、深色模式、320/390 像素窄屏及网站换页后的控件初始化。截图、演示 HTML 与报告保存在 `internal/native-diagram-test/`。常规导出回归同时检查 SVG 原样导入、重新打包保留，以及绘图属性与动画值中的外部资源引用。
 
-`pnpm run verify` 先检查两份 SKILL 逐字节一致、中英文 README 和 handbook 手册的章节标记与可执行示例一致（不自动判断翻译语义），再依次运行 Vue/TypeScript 类型检查、构建脚本 ESLint 检查、计算模型自检和构建契约/导出回归（含临时页面的网站构建）。全部通过才退出成功；提交前在本地运行即可，仓库保持仅提供本地制作、检查与构建，不启用 GitHub Actions。真实教材的浏览器验收需要已有 Edge 与 Playwright，单独执行。
+`pnpm run verify` 先检查两份 SKILL 逐字节一致、AGENTS 与根目录 SKILL 的唯一入口区块一致、中英文文档章节及可执行示例一致（不自动判断翻译语义），再执行类型检查、全范围 lint、数值自检、契约/导出回归（含网站构建），最后执行强制浏览器夹具回归。静态入口输出明确标注“尚未验证离线可用”。仓库按用户约定保持仅本地验收，不启用 GitHub Actions；没有 CI 不构成本地检查可省略的理由。
+
+ESLint 覆盖 `scripts/`、`standalone/`、`docs/.vitepress/theme/` 下的 JavaScript、TypeScript 和全部 Vue 组件，以及网站与 lint 配置；使用 Vue essential 和 TypeScript recommended 规则，警告也导致失败。TypeScript 标识符交给 `vue-tsc`，避免把类型名称当作未定义变量。检查回归会向 Vue 模板、TypeScript 和浏览器 JavaScript 注入缺陷，确认这些路径确实受规则保护。配置参考 [Vue ESLint](https://eslint.vuejs.org/user-guide/) 与 [TypeScript ESLint](https://typescript-eslint.io/users/configs/)。
+
+根目录 `SKILL.md` 是制作规范及 Agent 入口的唯一可编辑来源，`AGENTS.md` 从其中唯一的 `agent-entry` 区块生成，`.agents/skills/dialogue-to-course/SKILL.md` 是字节一致副本；详细追加与图解操作只在制作手册维护。更新源后运行 `pnpm run sync:agents`。验收只检查、不自动修复漂移；改动入口文字、规范源而未生成、重复/缺失/倒序区块标记均会失败。此检查保证受管文本一致，不判断所有自然语言陈述的语义正确性。
 
 导出备份使用时间戳加随机后缀，避免同毫秒冲突；备份不会自动删除。可按保留需要定期人工归档 `internal/html-export-backups/`，确认恢复点后再删除旧副本。
 

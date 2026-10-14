@@ -1,16 +1,15 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { createRequire } from 'node:module'
 import { execFileSync } from 'node:child_process'
 import { mkdir, writeFile, readFile, cp } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { createFixture } from './test-fixture.mjs'
+import { browserRuntime, launchBrowser } from './browser-runtime.mjs'
 
 const root = fileURLToPath(new URL('../', import.meta.url))
-test('offline shell locales, custom labels, prototype names, and flux endpoints', { skip: !process.env.COURSE_PLAYWRIGHT_DIR }, async t => {
-  const require = createRequire(path.join(root, 'package.json'))
-  const { chromium } = require(path.resolve(process.env.COURSE_PLAYWRIGHT_DIR, 'playwright'))
+test('offline shell locales, custom labels, prototype names, and flux endpoints', async t => {
+  const runtime = browserRuntime()
   const { fixture, cleanup } = await createFixture()
   t.after(cleanup)
   const topics = ['shell-en', 'shell-zh']
@@ -22,10 +21,10 @@ test('offline shell locales, custom labels, prototype names, and flux endpoints'
   }
   execFileSync(process.execPath, ['scripts/build-standalone.mjs', ...topics], { cwd: fixture, stdio: 'pipe' })
   // Run the production offline verifier, including no-JS and body preservation.
-  execFileSync(process.execPath, ['scripts/verify-native-html.mjs', process.env.COURSE_PLAYWRIGHT_DIR], { cwd: fixture, stdio: 'pipe' })
+  execFileSync(process.execPath, ['scripts/verify-native-html.mjs'], { cwd: fixture, stdio: 'pipe' })
   const reportDir = path.join(root, 'internal/test-feedback-browser')
   await cp(path.join(fixture, 'internal/native-html-test'), reportDir, { recursive: true })
-  const browser = await chromium.launch({ channel: 'msedge', headless: true })
+  const browser = await launchBrowser(runtime)
   t.after(() => browser.close())
   for (const [index, topic] of topics.entries()) {
     const file = path.join(fixture, 'dist', `${topic}.html`)
@@ -96,5 +95,5 @@ test('offline shell locales, custom labels, prototype names, and flux endpoints'
     assert.deepEqual(errors, [])
     await context.close()
   }
-  await writeFile(path.join(reportDir, 'shell-checks.json'), JSON.stringify({ browser: `Microsoft Edge ${browser.version()}`, topics, offline: true, locales: true, customLabels: true, prototypeNamesIgnored: true, fluxEndpoint: 495, headingHierarchy: true, keyboardSubsectionNavigation: true, noJavaScriptDetails: true, legacyOutlineEnhanced: true, labTitlesExcluded: true }, null, 2))
+  await writeFile(path.join(reportDir, 'shell-checks.json'), JSON.stringify({ browser: `${runtime.browserName} ${browser.version()}`, topics, offline: true, locales: true, customLabels: true, prototypeNamesIgnored: true, fluxEndpoint: 495, headingHierarchy: true, keyboardSubsectionNavigation: true, noJavaScriptDetails: true, legacyOutlineEnhanced: true, labTitlesExcluded: true }, null, 2))
 })

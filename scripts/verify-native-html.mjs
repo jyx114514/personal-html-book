@@ -1,30 +1,26 @@
 import assert from 'node:assert/strict'
-import { createRequire } from 'node:module'
 import { execFileSync } from 'node:child_process'
 import { readFile, writeFile, mkdir, copyFile, readdir } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
 import { createFixture } from './test-fixture.mjs'
+import { browserRuntime, launchBrowser } from './browser-runtime.mjs'
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 function fail(message) { console.error('浏览器验收失败：' + message); process.exit(1) }
 let names
 try { names = (await readdir(path.join(root, 'dist'))).filter(name => name.endsWith('.html')) }
 catch (error) { if (error.code === 'ENOENT') fail('未找到 dist/；请先构建至少一个独立 HTML。'); throw error }
 if (!names.length) fail('dist/ 中没有 HTML；请先构建教材。')
-if (!process.argv[2]) fail('用法：node scripts/verify-native-html.mjs ./node_modules（该目录内必须直接包含 playwright/）')
-const playwrightPath = path.resolve(process.argv[2], 'playwright')
-const require = createRequire(path.join(root, 'package.json'))
-let chromium
-try { ({ chromium } = require(playwrightPath)) }
-catch (error) { fail(`无法加载 ${playwrightPath}；参数必须是直接包含 playwright/ 的 node_modules 目录，例如 ./node_modules。原始错误：${error.message}`) }
+let runtime
+try { runtime = browserRuntime(process.argv[2]) } catch (error) { fail(error.message) }
 const directory = path.join(root, 'internal/native-html-test')
 await mkdir(directory, { recursive: true })
 let browser
-try { browser = await chromium.launch({ channel: 'msedge', headless: true }) } catch (error) { fail('无法启动 Microsoft Edge：' + error.message) }
+try { browser = await launchBrowser(runtime) } catch (error) { fail(error.message) }
 let fixture, cleanup
 try { ({ fixture, cleanup } = await createFixture()) } catch (error) { await browser.close(); throw error }
-const report = { browser: `Microsoft Edge ${browser.version()}`, offline: true, topics: [] }
+const report = { browser: `${runtime.browserName} ${browser.version()}`, offline: true, topics: [] }
 const extractBody = html => {
   const match = html.match(/<!-- course:body:start -->(?:\r?\n)?([\s\S]*?)(?:\r?\n)?<!-- course:body:end -->/)
   assert.ok(match, 'Missing editable body markers')
@@ -91,6 +87,8 @@ try {
 
     const noJsContext = await browser.newContext({ offline: true, javaScriptEnabled: false })
     const noJs = await noJsContext.newPage()
+    noJs.on('request', request => requests.push(request.url()))
+    noJs.on('pageerror', error => errors.push(error.message))
     await noJs.goto(pathToFileURL(standalonePath).href)
     assert.equal(normalize(await noJs.locator('article').innerText()), normalize(bodyText))
     assert.equal(await noJs.locator('mjx-container svg').count(), counts.formulas)

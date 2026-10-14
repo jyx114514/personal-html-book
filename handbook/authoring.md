@@ -12,6 +12,8 @@ pnpm install --frozen-lockfile
 pnpm run verify
 ```
 
+完整工作流验收包含强制离线浏览器夹具，浏览器准备见[维护指南](maintenance.md)。只有 `verify:static` 可以不启动浏览器，它不代表离线验收通过。具体教材完成构建后运行 `pnpm run verify:html`；夹具通过不能代替当前交付文件的验收。
+
 新克隆仓库不包含教材数据。构建教材前，先在本地准备或恢复：
 
 1. `content/<topic>/manifest.json`：主题元数据。
@@ -35,7 +37,7 @@ pnpm run verify
 <!-- readme-section: authoring -->
 ## 制作和编辑
 
-`scripts/build-standalone.mjs` 在构建期将 Markdown 转成静态语义化 HTML，渲染公式、代码高亮和实验初值，复用共享主题，并内联全部资源。运行时 JavaScript 只增强目录、复制与实验交互，不重建正文。制作规范见 [SKILL.md](../SKILL.md)，它与 `.agents/skills/dialogue-to-course/SKILL.md` 必须同步。
+`scripts/build-standalone.mjs` 在构建期将 Markdown 转成静态语义化 HTML，渲染公式、代码高亮和实验初值，复用共享主题，并内联全部资源。运行时 JavaScript 只增强目录、复制与实验交互，不重建正文。制作规范的唯一可编辑来源是根目录 [SKILL.md](../SKILL.md)；修改后运行 `pnpm run sync:agents`，生成 `AGENTS.md` 并同步 `.agents/skills/dialogue-to-course/SKILL.md`，验收会拒绝副本漂移。
 
 ```bash
 # 首次制作：提供清单及章节后，导出该主题

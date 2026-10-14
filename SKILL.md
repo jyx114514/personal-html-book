@@ -4,6 +4,25 @@ description: 将 ChatGPT 对话、科学笔记和本地计算流程整理为交�
 ---
 # 从对话到课程——学术教材与交互式实验
 
+## Agent 项目入口（唯一来源）
+
+以下区块生成根目录 `AGENTS.md`；详细规范只在本文件和对应手册中维护，不在入口文件独立改写。
+
+<!-- agent-entry:start -->
+# Agent 项目指令
+
+<!-- 由 SKILL.md 的 agent-entry 区块生成；修改规范源后运行 pnpm run sync:agents，禁止独立维护本副本。 -->
+
+本项目将对话、科学笔记和本地计算流程整理为交互式 HTML 教材。处理章节任务前，阅读 `.agents/skills/dialogue-to-course/SKILL.md` 和 `handbook/authoring.md`。
+
+- 内容组织、资料核查、隐私、固定学术视觉、HTML 正文权威版本和版本控制范围，以 `SKILL.md` 对应章节为准。
+- 已有 HTML 的保护、末尾追加、原生静态/动态图解及构建操作，以 `handbook/authoring.md` 的“制作和编辑”“原生讲解图片”为准；操作前读取当前 HTML，不得用旧 Markdown 或历史备份覆盖人工修订。
+- 验收分层、依赖与维护操作，以 `handbook/maintenance.md` 为准。本项目仅提供本地检查与构建，不启用 GitHub Actions。
+- 工作流修订运行 `pnpm run verify`，必须包含离线浏览器夹具回归；`pnpm run verify:static` 只做静态检查，不能报告完整验收通过或离线可用。具体教材构建后运行 `pnpm run verify:html` 验证当前交付文件，夹具通过不能代替教材验收。缺少依赖或浏览器时完整验收必须失败，未执行项如实说明。
+
+规范更新只修改根目录 `SKILL.md` 或对应手册，然后运行 `pnpm run sync:agents`。该命令生成本入口并同步 Skill 副本；`pnpm run verify` 自动检测副本及入口漂移。
+<!-- agent-entry:end -->
+
 ## 任务目标
 将用户提供的 ChatGPT 对话、科学笔记和本地计算流程转换为结构连贯的交互式 HTML 教材或笔记。正文语言、讲解深度与篇幅根据用户任务确定。独立检索权威资料，交叉核查实质性论述，并按需补充有用的背景知识。用户保留最终的编辑审核权。**不得发布原始对话索引、私有审查记录或未经脱敏的本地路径。**
 
@@ -101,12 +120,13 @@ description: 将 ChatGPT 对话、科学笔记和本地计算流程整理为交�
 ## 工作流程
 
 1. 阅读 `AGENTS.md`、本 Skill、共享 CSS 和至少一个现有章节。根目录与 `.agents/skills/dialogue-to-course/` 中的两份 `SKILL.md` 必须保持一致，修改规则时同步更新。
-   `pnpm run verify` 自动检查两份 Skill 逐字节一致，并检查中英文 README 和 handbook 手册的章节标记与可执行示例一致；翻译语义仍须人工核对。
+   规则更新只编辑根目录 `SKILL.md`，然后运行 `pnpm run sync:agents` 生成 `AGENTS.md` 并同步 Skill 副本。`pnpm run verify` 自动检查两份 Skill 逐字节一致、AGENTS 与本文件的 agent-entry 区块一致，以及中英文 README 和 handbook 的章节标记与可执行示例一致；翻译语义仍须人工核对。追加保护与原生图解的细则统一维护在 `handbook/authoring.md`，本文件不维护第二套细则。
 2. 默认按独立 HTML 规划主题结构，确定主题标识、章节组织和需要的交互组件，并明确资料检索和验证问题。
 3. 检索资料并交叉核查；将私有审查笔记记入 `internal/`，并添加适当的公开学术引用。
 4. 直接编写或更新 `dist/<topic>.html` 的语义化正文，作为唯一权威版本；维护主题元数据和 HTML 目录链接。现有 Markdown 仅按“主题目录与兼容迁移”一次性导入。普通面板转换为 HTML，复杂实验限定在独立区域。只有网站模式才要求更新 VitePress 导航。
 5. 使用项目独立 HTML 导出工具 `scripts/build-standalone.mjs`。导出器在构建时生成静态正文、数学 SVG/MathML、代码高亮和实验初值，并内嵌共享 CSS、JavaScript 与全部资源；运行时不得挂载整个教材或从 JavaScript 重建正文。再次导出优先读取最终 HTML，保留用户修改；只有显式迁移才读取历史 Markdown。检查最终 HTML 源码中能直接搜索、修改正文，且 CSS、字体、图片、代码高亮与交互依赖不需要外部文件。不能用 VitePress 网站构建代替单文件导出。
 6. 验证数值示例、公式和组件行为；依赖可用时运行适用的检查，以及已实际注册的独立 HTML 构建命令。`pnpm run build` 当前用于 VitePress 网站构建，仅在网站模式或需要验证网站兼容性时执行；它不能替代独立 HTML 导出。依赖缺失或构建失败时如实报告，未经用户允许不得安装额外的 Python 包。
+   工作流修订运行 `pnpm run verify`，包含静态检查、隔离构建与强制离线浏览器夹具回归；缺少浏览器必须失败。`pnpm run verify:static` 只用于排查静态问题，不算完整验收。具体教材完成构建后运行 `pnpm run verify:html`；夹具回归不能证明真实交付文件已达标。命令与检查范围统一见 `handbook/maintenance.md`。
 7. 按“独立 HTML 验收标准”逐项测试每个输出文件，并记录实际完成的检查。无法执行的检查应明确列为未验证。
 8. 检查主题源文件和最终 HTML：不得包含原始对话、本地路径泄漏、私有审查文件或缺乏依据的结果。版本控制仅跟踪制作工作流，不纳入教材正文及交付产物。
 9. 向用户概述输出文件、检查结果、实质性不确定事项及未验证内容；不得将尚未审核的内容表述为已经获得用户批准。

@@ -1,17 +1,16 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { createRequire } from 'node:module'
 import { execFileSync } from 'node:child_process'
 import { createServer } from 'node:http'
 import { mkdir, writeFile, readFile, copyFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { createFixture } from './test-fixture.mjs'
+import { browserRuntime, launchBrowser } from './browser-runtime.mjs'
 
 const root = fileURLToPath(new URL('../', import.meta.url))
-test('native SVG diagrams work offline, without JS, with reduced motion, and across site routes', { skip: !process.env.COURSE_PLAYWRIGHT_DIR }, async t => {
-  const require = createRequire(path.join(root, 'package.json'))
-  const { chromium } = require(path.resolve(process.env.COURSE_PLAYWRIGHT_DIR, 'playwright'))
+test('native SVG diagrams work offline, without JS, with reduced motion, and across site routes', async t => {
+  const runtime = browserRuntime()
   const { fixture, cleanup } = await createFixture()
   let browser, server
   t.after(async () => {
@@ -31,7 +30,7 @@ test('native SVG diagrams work offline, without JS, with reduced motion, and acr
   await writeFile(path.join(content, 'one.md'), source)
   execFileSync(process.execPath, ['scripts/build-standalone.mjs', 'diagrams'], { cwd: fixture, stdio: 'pipe' })
   const file = path.join(fixture, 'dist/diagrams.html')
-  browser = await chromium.launch({ channel: 'msedge', headless: true })
+  browser = await launchBrowser(runtime)
   const reportDir = path.join(root, 'internal/native-diagram-test')
   await mkdir(reportDir, { recursive: true })
   await copyFile(file, path.join(reportDir, 'demo.html'))
@@ -130,5 +129,5 @@ test('native SVG diagrams work offline, without JS, with reduced motion, and acr
   await sitePage.locator('[data-course-animation-play]').first().waitFor({ state: 'visible' })
   assert.equal(await sitePage.locator('#signal-diagram circle').evaluate(circle => circle.cx.animVal.value), 40)
   assert.deepEqual(errors, [])
-  await writeFile(path.join(reportDir, 'checks.json'), JSON.stringify({ browser: `Microsoft Edge ${browser.version()}`, offline: true, noJavaScript: true, staticDiagram: true, playPauseResumeReset: true, keyboard: true, isolatedFigures: true, reducedMotion: true, darkMode: true, widths: [390, 320], noExternalRequests: true, siteNavigation: true }, null, 2))
+  await writeFile(path.join(reportDir, 'checks.json'), JSON.stringify({ browser: `${runtime.browserName} ${browser.version()}`, offline: true, noJavaScript: true, staticDiagram: true, playPauseResumeReset: true, keyboard: true, isolatedFigures: true, reducedMotion: true, darkMode: true, widths: [390, 320], noExternalRequests: true, siteNavigation: true }, null, 2))
 })
