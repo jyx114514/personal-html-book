@@ -61,4 +61,4 @@ https://jyx114514.github.io/personal-html-book/rt-qpcr-ct-deepseek4.1.html
 
 ## 许可
 
-项目代码与规范采用 [MIT](LICENSE) 许可。输入材料和引用资源遵循各自的许可。
+项目代码与规范采用 [CC BY-NC 4.0](LICENSE) 许可。输入材料和引用资源遵循各自的许可。
