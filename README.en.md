@@ -60,4 +60,4 @@ https://jyx114514.github.io/personal-html-book/rt-qpcr-ct-deepseek4.1.html
 <!-- readme-section: license -->
 ## License
 
-Project code and conventions are licensed under [MIT](LICENSE). Input material and cited resources retain their own licenses.
+Project code and conventions are licensed under [CC BY-NC 4.0](LICENSE). Input material and cited resources retain their own licenses.
