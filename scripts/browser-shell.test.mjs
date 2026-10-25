@@ -73,6 +73,41 @@ test('offline shell locales, custom labels, prototype names, and flux endpoints'
     assert.equal(await toggle.getAttribute('aria-expanded'), 'false')
     assert.equal(await page.locator('.course-table-scroll').getAttribute('aria-label'), index ? '可横向滚动的数据表' : 'Scrollable data table')
     assert.equal(await page.locator('button.copy').getAttribute('aria-label'), index ? '复制代码' : 'Copy code')
+    // The shared academic toolbar must stay visible and outside the code area.
+    const copyButton = page.locator('button.copy')
+    for (const colorScheme of ['light', 'dark']) {
+      await page.emulateMedia({ colorScheme })
+      for (const width of [1280, 390, 320]) {
+        await page.setViewportSize({ width, height: 844 })
+        const toolbar = await copyButton.evaluate(button => {
+          const pre = button.parentElement.querySelector('pre')
+          const language = button.parentElement.querySelector('.lang')
+          return {
+            opacity: getComputedStyle(button).opacity,
+            position: getComputedStyle(button).position,
+            label: getComputedStyle(button, '::before').content,
+            aboveCode: button.getBoundingClientRect().bottom <= pre.getBoundingClientRect().top,
+            besideLanguage: language.getBoundingClientRect().right <= button.getBoundingClientRect().left,
+          }
+        })
+        assert.equal(toolbar.opacity, '1')
+        assert.equal(toolbar.position, 'static')
+        assert.equal(toolbar.label, JSON.stringify(index ? '复制代码' : 'Copy code'))
+        assert.ok(toolbar.aboveCode, 'Copy toolbar must not cover code')
+        assert.ok(toolbar.besideLanguage, 'Language and copy button must not overlap')
+        assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
+        await copyButton.evaluate(button => button.classList.add('copied'))
+        const feedback = await copyButton.evaluate(button => ({
+          label: getComputedStyle(button, '::before').content,
+          transform: getComputedStyle(button, '::before').transform,
+        }))
+        assert.equal(feedback.label, JSON.stringify(index ? '已复制' : 'Copied'))
+        assert.equal(feedback.transform, 'none', 'Copy feedback must remain inside the button')
+        await copyButton.evaluate(button => button.classList.remove('copied'))
+      }
+    }
+    await page.emulateMedia({ colorScheme: 'light' })
+    await page.setViewportSize({ width: 390, height: 844 })
     assert.equal(await page.locator('[data-course-component="constructor"]').innerText(), 'Constructor placeholder')
     assert.equal(await page.locator('[data-course-component="toString"]').innerText(), 'String placeholder')
     const time = page.getByLabel('示踪时间', { exact: true })
@@ -92,6 +127,7 @@ test('offline shell locales, custom labels, prototype names, and flux endpoints'
     await toggle.click()
     assert.equal(await toggle.innerText(), 'Custom close')
     assert.equal(await page.locator('button.copy').getAttribute('aria-label'), 'Custom copy')
+    assert.equal(await copyButton.evaluate(button => getComputedStyle(button, '::before').content), '"Custom copy"')
     assert.deepEqual(errors, [])
     await context.close()
   }

@@ -7,6 +7,9 @@ import path from 'node:path'
 import { assertStandaloneResources } from './standalone-validation.mjs'
 import { extractDiagramExample } from './verification-inputs.mjs'
 
+// Markdown rendering normalizes CRLF to LF; retain every other SVG character.
+const normalizeLineEndings = text => text.replace(/\r\n/g, '\n')
+
 test('resource validation rejects external HTML/CSS resources regardless of quoting', () => {
   const external = [
     '<form action=remote></form>', '<button formaction=remote>Send</button>', '<meta property=og:image content=remote>', '<img longdesc=remote>',
@@ -40,6 +43,24 @@ test('resource validation rejects external HTML/CSS resources regardless of quot
     <script>const sample = '<img src="example.png">';</script>`)
 })
 
+test('native SVG import preserves the complete example with LF and CRLF source files', async t => {
+  const { fixture, cleanup } = await createFixture()
+  t.after(cleanup)
+  const source = path.join(fixture, 'content', 'svg-newlines')
+  const guide = await readFile(new URL('../handbook/authoring.md', import.meta.url), 'utf8')
+  const diagram = normalizeLineEndings(extractDiagramExample(guide))
+  await mkdir(source, { recursive: true })
+  await writeFile(path.join(source, 'manifest.json'), JSON.stringify({ topic: 'svg-newlines', title: 'SVG newlines', output: 'svg-newlines.html', chapters: ['one.md'] }))
+  for (const ending of ['\n', '\r\n']) {
+    await writeFile(path.join(source, 'one.md'), ('## SVG example\n\n' + diagram + '\n').replaceAll('\n', ending))
+    execFileSync(process.execPath, ['scripts/build-standalone.mjs', 'svg-newlines', '--from-markdown'], { cwd: fixture, stdio: 'pipe' })
+    const html = await readFile(path.join(fixture, 'dist', 'svg-newlines.html'), 'utf8')
+    const exported = html.match(/<figure data-course-animation>[\s\S]*?<\/figure>/)?.[0]
+    assert.ok(exported, 'Exported SVG example is missing')
+    assert.equal(normalizeLineEndings(exported), diagram, `SVG content changed for ${JSON.stringify(ending)} source`)
+  }
+})
+
 test('real exporter assigns book-wide anchors and preserves human revisions and appended content', async t => {
   const { fixture, cleanup } = await createFixture()
   t.after(cleanup)
@@ -56,7 +77,7 @@ test('real exporter assigns book-wide anchors and preserves human revisions and 
   build()
   const target = path.join(fixture, 'dist', 'regression.html')
   const original = await readFile(target, 'utf8')
-  assert.ok(original.includes(diagram), 'Exporter must preserve the documented native SVG example')
+  assert.ok(normalizeLineEndings(original).includes(normalizeLineEndings(diagram)), 'Exporter must preserve the documented native SVG example (apart from CRLF/LF normalization)')
   assert.match(original, /data-course-animation-controls hidden/)
   assert.throws(() => execFileSync(process.execPath, ['scripts/verify-native-html.mjs', '.'], { cwd: fixture, stdio: 'pipe' }), error => /直接包含 playwright\/ 的 node_modules 目录/.test(String(error.stderr)))
   assert.equal([...original.matchAll(/<mjx-container data-tex=/g)].length, 3, 'Every inline and block formula needs source TeX')
