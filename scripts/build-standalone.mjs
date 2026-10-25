@@ -47,19 +47,6 @@ for (const topic of topics) {
 }
 await mkdir(generated, { recursive: true })
 
-const client = await build({
-  root, configFile: false, plugins: [vue()],
-  define: { 'process.env.NODE_ENV': JSON.stringify('production') },
-  build: { write: false, assetsInlineLimit: 10000000, cssCodeSplit: false,
-    lib: { entry: path.join(root, 'standalone/main.ts'), name: 'CourseInteractions', formats: ['iife'] },
-    rollupOptions: { output: { inlineDynamicImports: true } } }
-})
-const outputs = (Array.isArray(client) ? client : [client]).flatMap(result => result.output)
-const chunks = outputs.filter(file => file.type === 'chunk')
-if (chunks.length !== 1 || outputs.some(file => file.type === 'asset' && !file.fileName.endsWith('.css'))) throw new Error('Unbundled resources')
-const js = chunks[0].code.replace(/<\/script/gi, '<\\/script')
-const css = outputs.filter(file => file.type === 'asset').map(file => file.source).join('\n')
-
 let renderLab
 async function getLabRenderer() {
   if (renderLab) return renderLab
@@ -84,6 +71,50 @@ export async function renderLab(name, mode) { return renderToString(createSSRApp
 const parserRequire = createRequire(import.meta.resolve('vue/compiler-sfc'))
 const { parse: parseHtml } = parserRequire('@vue/compiler-dom')
 const modes = { OmicsLab: ['signal','tpm','methyl','hic','mass','flux'], ComputerLab: ['bits','float','address','layout','stack'], GradientDemo: [] }
+const clientBundles = new Map()
+async function getClientBundle(body) {
+  const used = new Set()
+  function collect(node) {
+    const name = node.props?.find(prop => prop.type === 6 && prop.name.toLowerCase() === 'data-course-component')?.value?.content
+    if (Object.hasOwn(modes, name)) used.add(name)
+    for (const child of node.children ?? []) collect(child)
+  }
+  collect(parseHtml(body, { parseMode: 'html' }))
+  const names = Object.keys(modes).filter(name => used.has(name))
+  const key = names.join('-') || 'native'
+  if (clientBundles.has(key)) return clientBundles.get(key)
+  const entry = path.join(generated, `client-${key}.ts`)
+  await writeFile(entry, [
+    "import { mountStandalone } from '../standalone/main'",
+    ...(names.length ? [
+      "import { createSSRApp } from 'vue'",
+      ...names.map(name => `import ${name} from '../docs/.vitepress/theme/components/${name}.vue'`),
+      `const labs = { ${names.join(', ')} }
+for (const island of Array.from(document.querySelectorAll<HTMLElement>('[data-course-component]'))) {
+  const name = island.dataset.courseComponent as keyof typeof labs
+  if (!Object.hasOwn(labs, name)) continue
+  createSSRApp(labs[name], island.dataset.mode ? { mode: island.dataset.mode } : {}).mount(island)
+}`,
+    ] : []),
+    'mountStandalone()',
+  ].join('\n'))
+  const client = await build({
+    root, configFile: false, plugins: [vue()],
+    define: { 'process.env.NODE_ENV': JSON.stringify('production') },
+    build: { write: false, assetsInlineLimit: 10000000, cssCodeSplit: false,
+      lib: { entry, name: 'CourseInteractions', formats: ['iife'] },
+      rollupOptions: { output: { inlineDynamicImports: true } } },
+  })
+  const outputs = (Array.isArray(client) ? client : [client]).flatMap(result => result.output)
+  const chunks = outputs.filter(file => file.type === 'chunk')
+  if (chunks.length !== 1 || outputs.some(file => file.type === 'asset' && !file.fileName.endsWith('.css'))) throw new Error('Unbundled resources')
+  const bundle = {
+    js: chunks[0].code.replace(/<\/script/gi, '<\\/script'),
+    css: outputs.filter(file => file.type === 'asset').map(file => file.source).join('\n'),
+  }
+  clientBundles.set(key, bundle)
+  return bundle
+}
 const escape = text => text.replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]))
 const plain = text => {
   const collect = node => node.type === 2 ? node.content : (node.children ?? []).map(collect).join('')
@@ -217,6 +248,7 @@ for (const topic of topics) {
     title = escape(manifest.title)
     lang = escape(manifest.lang)
   }
+  const { js, css } = await getClientBundle(body)
   if (previous) {
     const backupRoot = path.join(root, 'internal', 'html-export-backups')
     await mkdir(backupRoot, { recursive: true })

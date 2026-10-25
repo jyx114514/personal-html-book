@@ -5,10 +5,61 @@ import { mkdir, readFile, writeFile, readdir } from 'node:fs/promises'
 import { execFileSync } from 'node:child_process'
 import path from 'node:path'
 import { assertStandaloneResources } from './standalone-validation.mjs'
-import { extractDiagramExample } from './verification-inputs.mjs'
+import { extractDiagramExample, extractInteractionScript } from './verification-inputs.mjs'
 
 // Markdown rendering normalizes CRLF to LF; retain every other SVG character.
 const normalizeLineEndings = text => text.replace(/\r\n/g, '\n')
+
+test('runtime bundles include only current experiment islands and re-export rechecks the edited body', async t => {
+  const { fixture, cleanup } = await createFixture()
+  t.after(cleanup)
+  const topics = {
+    native: '',
+    'native-again': '',
+    omics: '<OmicsLab mode="tpm" />',
+    computer: '<ComputerLab mode="bits" />',
+    gradient: '<GradientDemo />',
+    mixed: '<OmicsLab mode="tpm" />\n\n<ComputerLab mode="bits" />\n\n<GradientDemo />',
+  }
+  for (const [topic, component] of Object.entries(topics)) {
+    const source = path.join(fixture, 'content', topic)
+    await mkdir(source, { recursive: true })
+    await writeFile(path.join(source, 'manifest.json'), JSON.stringify({ topic, title: topic, output: `${topic}.html`, chapters: ['one.md'] }))
+    await writeFile(path.join(source, 'one.md'), `## ${topic}\n\nEditable static paragraph.\n\n${component}\n`)
+  }
+  const build = (...topics) => execFileSync(process.execPath, ['scripts/build-standalone.mjs', ...topics], { cwd: fixture, stdio: 'pipe' })
+  build(...Object.keys(topics))
+  const documents = Object.fromEntries(await Promise.all(Object.keys(topics).map(async topic => [topic, await readFile(path.join(fixture, 'dist', `${topic}.html`), 'utf8')])))
+  const scripts = Object.fromEntries(Object.entries(documents).map(([topic, html]) => [topic, extractInteractionScript(html)]))
+  const signatures = { omics: 'RNA-seq', computer: 'binary32', gradient: '链式法则' }
+  for (const [topic, script] of Object.entries(scripts)) {
+    assertStandaloneResources(documents[topic])
+    for (const [component, signature] of Object.entries(signatures)) {
+      assert.equal(script.includes(signature), topic === component || topic === 'mixed', `${topic} unexpectedly includes or omits ${component}`)
+    }
+  }
+  assert.equal(scripts.native, scripts['native-again'], 'Equal component sets should share identical runtime bundles')
+  assert.doesNotMatch(scripts.native, /__vueParentComponent/)
+  assert.ok(Buffer.byteLength(scripts.native) < Buffer.byteLength(scripts.mixed) / 4, 'A static textbook must not carry the Vue experiment runtime')
+  t.diagnostic(JSON.stringify({ runtimeBytes: Object.fromEntries(Object.entries(scripts).map(([topic, script]) => [topic, Buffer.byteLength(script)])) }))
+  const nativeStyles = documents.native.match(/<style id="course-design-system">([\s\S]*?)<\/style>/)[1]
+  assert.doesNotMatch(nativeStyles, /data-v-/)
+  const body = html => html.match(/<!-- course:body:start -->\n([\s\S]*?)\n<!-- course:body:end -->/)[1]
+  const target = path.join(fixture, 'dist/native.html')
+  const islandContent = documents.omics.match(/<article class="vp-doc">([\s\S]*?)<\/article>/)[1]
+    .replace('data-course-component="OmicsLab"', 'DATA-COURSE-COMPONENT="Omics&#76;ab"')
+  const edited = documents.native.replace('</article>', islandContent + '</article>')
+  await writeFile(target, edited)
+  build('native')
+  const repacked = await readFile(target, 'utf8')
+  assert.equal(body(repacked), body(edited))
+  assert.equal(extractInteractionScript(repacked), scripts.omics, 'Adding an island directly in HTML must add its runtime')
+  await writeFile(target, documents.native)
+  build('native')
+  const withoutIsland = await readFile(target, 'utf8')
+  assert.equal(body(withoutIsland), body(documents.native))
+  assert.equal(extractInteractionScript(withoutIsland), scripts.native, 'Removing all islands must remove the experiment runtime')
+})
 
 test('resource validation rejects external HTML/CSS resources regardless of quoting', () => {
   const external = [

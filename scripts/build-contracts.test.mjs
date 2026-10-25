@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { renderMathWithTex } from './standalone-math.mjs'
 import { assertDocumentationCopies, assertAgentInstructions, renderAgentInstructions } from './documentation-sync.mjs'
-import { extractDiagramExample, extractInteractionScript, stripDiagramAnimation, parsePrivateTerms } from './verification-inputs.mjs'
+import { extractDiagramExample, extractInteractionScript, stripDiagramAnimation, parsePrivateTerms, assertNoPrivateReferences } from './verification-inputs.mjs'
 import { execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
@@ -77,4 +77,30 @@ test('private terms parsing names the environment variable and fails before laun
   assert.throws(() => execFileSync(process.execPath, ['scripts/verify-native-html.mjs'], {
     cwd: fileURLToPath(new URL('../', import.meta.url)), stdio: 'pipe', env: { ...process.env, COURSE_PRIVATE_TERMS: 'not-json' },
   }), error => error.status !== 0 && /浏览器验收失败：COURSE_PRIVATE_TERMS JSON 解析失败/.test(String(error.stderr)) && !/SyntaxError/.test(String(error.stderr)))
+})
+
+test('privacy checks distinguish public resource URLs from local private paths', () => {
+  for (const html of [
+    '<p>resources/input.tsv and my-internal/results are public examples.</p>',
+    '<a href="https://example.org/resources/dataset">Dataset</a>',
+    '<a href="https://example.org/sources/dataset">Dataset</a>',
+    '<p>https://example.org/internal/paper</p>',
+    '<a href="&#104;ttps://example.org/sources/dataset">Encoded URL</a>',
+    '<a href="//example.org/sources/dataset">Dataset</a>',
+    '<script>const help = "https://example.org/resources/help";</script>',
+  ]) assertNoPrivateReferences(html)
+  for (const html of [
+    '<a href="sources/conversation.md">Private source</a>',
+    '<a href="../internal/review.md">Review</a>',
+    '<a href="project/sources/conversation.md">Private source</a>',
+    '<a href="&#115;ources/conversation.md">Encoded private path</a>',
+    '<p>内部材料：sources/conversation.md</p>',
+    '<script>const file = "internal/review.md";</script>',
+    '<!-- sources/conversation.md -->',
+    '<p>C:\\Users\\someone\\notes.txt</p>',
+    '<p>/home/someone/notes.txt</p>',
+    '<p>/Users/someone/notes.txt</p>',
+    '<a href="https://chatgpt.com/share/original">Conversation</a>',
+    '<p>turn3search2</p>',
+  ]) assert.throws(() => assertNoPrivateReferences(html, 'fixture.html'), /fixture\.html.*(?:私有材料路径|本地路径)/)
 })

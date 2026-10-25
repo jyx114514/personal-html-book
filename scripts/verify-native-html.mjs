@@ -6,7 +6,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 
 import { createFixture } from './test-fixture.mjs'
 import { browserRuntime, launchBrowser } from './browser-runtime.mjs'
-import { extractInteractionScript, parsePrivateTerms } from './verification-inputs.mjs'
+import { extractInteractionScript, parsePrivateTerms, assertNoPrivateReferences } from './verification-inputs.mjs'
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 function fail(message) { console.error('浏览器验收失败：' + message); process.exit(1) }
 let forbidden
@@ -73,9 +73,7 @@ try {
     assert.match(staticBody, /<p>/)
     const prose = await page.locator('article > p, article > section > p').allTextContents()
     for (const text of prose.filter(text => text.trim().length >= 80)) assert.ok(!js.includes(text.trim()), 'Article prose embedded in runtime')
-    assert.doesNotMatch(original, /chatgpt\.com\/share|sources[\/\\]|internal[\/\\]|\b[a-z]:[\/\\]|turn\d+(search|view)/i)
-
-    assert.doesNotMatch(original, /(?:\/home\/|\/Users\/)[^\s<>/]+\//)
+    assertNoPrivateReferences(original, name)
     for (const term of forbidden) assert.ok(!original.includes(term), 'Private term found in HTML')
 
     // The current HTML includes human revisions. Historical backups are provenance only.

@@ -46,11 +46,12 @@ The repository stores only the authoring workflow and reusable code. Source mate
 | [Maintenance and verification guide](handbook/maintenance.en.md) | Dependency constraints, regression tests, browser checks, and code layout |
 | [Local topic data](content/README.md) | Storing and restoring topic files (Chinese) |
 
-
+<!-- readme-section: style-example -->
 ## Style Example
 
 https://jyx114514.github.io/personal-html-book/example.html
 
+<!-- readme-section: style-comparison -->
 ## Style A/B testing (different content)
 
 https://jyx114514.github.io/personal-html-book/qpcr-ct-gpt6.1.html

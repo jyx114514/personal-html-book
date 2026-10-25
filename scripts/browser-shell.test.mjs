@@ -6,8 +6,84 @@ import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { createFixture } from './test-fixture.mjs'
 import { browserRuntime, launchBrowser } from './browser-runtime.mjs'
+import { courseUi } from '../docs/.vitepress/theme/course-ui.mjs'
 
 const root = fileURLToPath(new URL('../', import.meta.url))
+const normalizeLineEndings = text => text.replace(/\r\n/g, '\n')
+
+test('copy buttons write the actual clipboard and explain denied or unavailable clipboard access', async t => {
+  const { fixture, cleanup } = await createFixture()
+  t.after(cleanup)
+  const topics = ['copy-en', 'copy-zh']
+  for (const [index, topic] of topics.entries()) {
+    const source = path.join(fixture, 'content', topic)
+    await mkdir(source, { recursive: true })
+    await writeFile(path.join(source, 'manifest.json'), JSON.stringify({ topic, title: topic, lang: index ? 'zh-CN' : 'en', output: `${topic}.html`, chapters: ['one.md'] }))
+    await writeFile(path.join(source, 'one.md'), '## Copy code\n\nStatic paragraph.\n\n[Public resource](https://example.org/resources/dataset)\n\n```js\nconst x = "a & b";\n```\n\n<div class="code">\n<div class="code-bar"><span class="code-lang">JS</span><button class="copy" aria-label="Custom native copy">Native copy</button></div>\n<pre><code>const native = 2;\n</code></pre>\n</div>\n')
+  }
+  execFileSync(process.execPath, ['scripts/build-standalone.mjs', ...topics], { cwd: fixture, stdio: 'pipe' })
+  execFileSync(process.execPath, ['scripts/verify-native-html.mjs'], { cwd: fixture, stdio: 'pipe' })
+  const browser = await launchBrowser(browserRuntime())
+  t.after(() => browser.close())
+  const reportDir = path.join(root, 'internal/test-feedback-browser')
+  await mkdir(reportDir, { recursive: true })
+  for (const [index, topic] of topics.entries()) {
+    const ui = courseUi(index ? 'zh-CN' : 'en')
+    const context = await browser.newContext({ offline: true, viewport: { width: 320, height: 844 }, permissions: ['clipboard-read', 'clipboard-write'] })
+    try {
+      const page = await context.newPage()
+      const errors = [], requests = []
+      page.on('pageerror', error => errors.push(error.message))
+      page.on('request', request => requests.push(request.url()))
+      await page.goto(pathToFileURL(path.join(fixture, 'dist', `${topic}.html`)).href)
+      for (const block of await page.locator('div.language-js, .code').all()) {
+        const button = block.locator('button.copy')
+        const code = await block.locator('pre code').textContent()
+        await page.evaluate(() => navigator.clipboard.writeText('Previous clipboard contents'))
+        await button.focus()
+        await button.press('Enter')
+        await page.waitForFunction(text => navigator.clipboard.readText().then(value => value.replace(/\r\n/g, '\n') === text.replace(/\r\n/g, '\n')), code)
+        assert.equal(normalizeLineEndings(await page.evaluate(() => navigator.clipboard.readText())), normalizeLineEndings(code))
+        assert.ok(await button.evaluate(element => element.classList.contains('copied')))
+        assert.equal(await block.locator('[role="status"]').textContent(), ui.copied)
+        assert.equal(await block.locator('[role="status"]').getAttribute('aria-live'), 'polite')
+        if (await block.evaluate(element => element.classList.contains('code'))) assert.equal(await button.textContent(), ui.copied)
+        else assert.equal(await button.evaluate(element => getComputedStyle(element, '::before').content), JSON.stringify(ui.copied))
+      }
+      await page.waitForFunction(() => !document.querySelector('button.copy.copied'))
+      assert.equal(await page.locator('.code button.copy').textContent(), 'Native copy')
+      assert.equal(await page.locator('.code button.copy').getAttribute('aria-label'), 'Custom native copy')
+      for (const unavailable of [false, true]) {
+        await page.evaluate(unavailable => Object.defineProperty(navigator, 'clipboard', {
+          configurable: true,
+          value: unavailable ? undefined : { writeText: async () => { throw new DOMException('Denied', 'NotAllowedError') } },
+        }), unavailable)
+        for (const block of await page.locator('div.language-js, .code').all()) {
+          const button = block.locator('button.copy')
+          await button.click()
+          await block.locator('.course-copy-status[data-visible]').waitFor({ state: 'visible' })
+          const selected = await page.evaluate(() => {
+            const selection = getSelection()
+            return selection?.rangeCount ? selection.getRangeAt(0).toString() : ''
+          })
+          assert.equal(normalizeLineEndings(selected), normalizeLineEndings(await block.locator('pre code').textContent()))
+          assert.equal(await block.locator('[role="status"]').textContent(), ui.copySelected)
+          assert.equal(await block.locator('[role="status"]').isVisible(), true)
+          assert.equal(await button.evaluate(element => element.classList.contains('copied')), false)
+          assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
+        }
+      }
+      await page.screenshot({ path: path.join(reportDir, `${topic}-fallback.png`), fullPage: true })
+      await page.locator('.code pre').evaluate(element => element.remove())
+      await page.locator('.code button.copy').click()
+      assert.equal(await page.locator('.code [role="status"]').textContent(), ui.copyFailed)
+      assert.deepEqual(errors, [])
+      assert.deepEqual(requests.filter(url => /^https?:/.test(url)), [])
+    } finally { await context.close() }
+  }
+  await writeFile(path.join(reportDir, 'copy-checks.json'), JSON.stringify({ browser: browser.version(), topics, offline: true, actualClipboard: true, keyboard: true, deniedPermission: true, unavailableApi: true, manualSelection: true, missingCodeFeedback: true, width: 320 }, null, 2))
+})
+
 test('offline shell locales, custom labels, prototype names, and flux endpoints', async t => {
   const runtime = browserRuntime()
   const { fixture, cleanup } = await createFixture()

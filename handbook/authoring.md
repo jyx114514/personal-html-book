@@ -39,6 +39,8 @@ pnpm run verify
 
 `scripts/build-standalone.mjs` 在构建期将 Markdown 转成静态语义化 HTML，渲染公式、代码高亮和实验初值，复用共享主题，并内联全部资源。运行时 JavaScript 只增强目录、复制与实验交互，不重建正文。制作规范的唯一可编辑来源是根目录 [SKILL.md](../SKILL.md)；修改后运行 `pnpm run sync:agents`，生成 `AGENTS.md` 并同步 `.agents/skills/dialogue-to-course/SKILL.md`，验收会拒绝副本漂移。
 
+导出器按当前 HTML 正文中的 `data-course-component` 标记打包所需的白名单实验组件；没有这些实验时仅打包原生目录、复制和图解脚本，不包含 Vue 实验运行时。默认资源刷新也会重新识别正文中的组件，因此直接在 HTML 中增删实验后，重新导出即可更新依赖，正文保持原样。
+
 ```bash
 # 首次制作：提供清单及章节后，导出该主题
 pnpm run build:standalone my-topic
@@ -60,6 +62,8 @@ pnpm run build:standalone my-topic --from-markdown
 修改公式的 `data-tex` 后，需要同步更新静态 SVG/MathML；仅修改 TeX 不会自动刷新公式显示。
 
 代码与文本框复用 `docs/.vitepress/theme/custom.css` 的统一工具栏：顶部独占一行（48px），左侧显示语言，右侧常驻“复制代码”文字按钮；代码在下一行显示并可横向滚动。复制成功时在原按钮内显示“已复制”，不弹出覆盖代码的提示。按钮保留可见键盘焦点，明暗模式与窄屏均不得遮挡内容，不恢复为悬停才出现的浮动图标。独立 HTML 通过默认 `build:standalone <topic>` 刷新内嵌共享资源即可采用此样式，正文原样保留；网站模式直接复用同一主题。验收需检查中英文文案、常驻可见性、按钮与代码不重叠，以及复制反馈的位置。
+
+独立 HTML 同时支持高亮代码块和 `.code` / `.code-bar` 结构。剪贴板权限被拒绝或 API 不可用时，选中对应代码并在代码块下方提示使用 Ctrl+C 或 ⌘C；无法选中时显示手动复制提示。提示支持中英文与屏幕阅读器，不覆盖代码。浏览器回归实际点击按钮、读取剪贴板，并验证权限拒绝及 API 缺失时的反馈。
 
 目录保留桌面左侧固定布局与窄屏顶部折叠布局，根据正文的 H2–H6 生成层级。父标题可跳转，箭头或键盘可展开小标题；新导出的目录使用原生 `details`，关闭 JavaScript 仍可展开。实验容器内部的标题不进目录；自定义实验请使用 `data-course-outline="exclude"`。直接编写 HTML 时，为正文标题设置稳定且唯一的 `id`。资源刷新保留已有正文，运行时会增强旧的平面目录以支持子标题。
 

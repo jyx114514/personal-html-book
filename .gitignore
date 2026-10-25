@@ -20,6 +20,7 @@
 # Private inputs, editorial review and local configuration
 /sources/
 /internal/
+/.workbuddy/memory/
 .env
 .env.*
 !.env.example

@@ -39,6 +39,8 @@ The manifest lives at `content/my-topic/manifest.json`; chapters needed for the 
 
 `scripts/build-standalone.mjs` converts Markdown into static semantic HTML at build time, rendering formulas, code highlighting, and experiment initial values, reusing the shared theme and inlining every asset. Runtime JavaScript only enhances the outline, copy buttons, and experiment interaction — it never rebuilds the body. The root [SKILL.md](../SKILL.md) is the sole editable source of authoring conventions. After editing it, run `pnpm run sync:agents` to generate `AGENTS.md` and synchronize `.agents/skills/dialogue-to-course/SKILL.md`; verification rejects drift.
 
+The exporter bundles only allowlisted experiment components identified by `data-course-component` in the current HTML body. Without those experiments, it includes only native outline, copy, and diagram scripts, omitting the Vue experiment runtime. Default asset refresh also rescans the current body, so adding or removing experiments directly in HTML updates their dependencies on re-export while preserving the body.
+
 ```bash
 # First build: after supplying the manifest and chapters, export the topic
 pnpm run build:standalone my-topic
@@ -60,6 +62,8 @@ With no topic or with `--all`, the exporter only processes topics already in `di
 After changing a formula's `data-tex`, regenerate the static SVG/MathML as well; editing the TeX alone does not refresh the rendered formula.
 
 Code and text blocks reuse the toolbar in `docs/.vitepress/theme/custom.css`: a dedicated 48px top row shows the language on the left and an always-visible “Copy code” text button on the right. Code occupies the next row and can scroll horizontally. Successful copying shows “Copied” inside the same button, without a tooltip covering the code. Keep a visible keyboard focus indicator and prevent overlap in light mode, dark mode, and narrow layouts; do not restore a hover-only floating icon. For standalone HTML, the default `build:standalone <topic>` refreshes shared assets while preserving the body; site mode uses the same theme. Acceptance checks cover Chinese and English labels, persistent visibility, separation from code, and the position of copy feedback.
+
+Standalone HTML supports both highlighted code blocks and `.code` / `.code-bar` markup. If clipboard permission is denied or the API is unavailable, it selects the relevant code and displays a Ctrl+C or ⌘C instruction below the block; if selection fails, it asks the reader to copy manually. Feedback supports Chinese, English, and screen readers without covering code. Browser regression clicks the actual buttons, reads the clipboard, and verifies feedback when permission is denied or the API is missing.
 
 The outline keeps its fixed left desktop layout and collapsible top navigation on narrow screens, nesting body headings from H2 through H6. Parent headings remain links; arrows or the keyboard expand their subsections. Newly exported outlines use native `details`, which work with JavaScript disabled. Headings inside experiment containers are excluded; mark custom experiments with `data-course-outline="exclude"`. Give manually authored HTML headings stable, unique `id` values. Resource refresh preserves the existing body, while the runtime enhances historical flat outlines with subsections.
 
