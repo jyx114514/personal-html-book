@@ -10,7 +10,7 @@ for (const args of [
   ['node_modules/vue-tsc/bin/vue-tsc.js', '--noEmit', '-p', 'tsconfig.json'],
   ['node_modules/eslint/bin/eslint.js', 'scripts', 'standalone', 'docs/.vitepress/theme', 'docs/.vitepress/config.mts', 'eslint.config.mjs', '--max-warnings=0'],
   ['scripts/verify-computer-models.mjs'],
-  ['--test', 'scripts/standalone.test.mjs', 'scripts/build-contracts.test.mjs', 'scripts/outline-model.test.mjs', 'scripts/quality-gates.test.mjs'],
+  ['--test', 'scripts/standalone.test.mjs', 'scripts/build-contracts.test.mjs', 'scripts/outline-model.test.mjs', 'scripts/quality-gates.test.mjs', 'scripts/annotations.test.mjs'],
   ...(staticOnly ? [] : [['scripts/verify-browser.mjs']]),
 ]) {
   console.log('> node ' + args.join(' '))

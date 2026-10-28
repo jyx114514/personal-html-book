@@ -22,7 +22,7 @@ pnpm run verify
 
 `verify` now requires offline browser fixture regression; a passing typecheck or build alone is insufficient. Playwright is a dev dependency. Windows uses existing Microsoft Edge by default; other platforms use installed Playwright Chromium. See the [maintenance guide](handbook/maintenance.en.md) for browser setup and failure handling. `verify:static` is only for static diagnosis and does not establish offline usability. After building a real textbook, also run `pnpm run verify:html` against the current files.
 
-A fresh clone contains no sample textbooks or topic data. The agent prepares a topic using the [authoring and build guide](handbook/authoring.en.md), then outputs `dist/<topic>.html`, which opens directly in a browser. For revisions or additions, give the agent the current HTML: it is the authoritative body.
+A fresh clone includes the public style preview `example.html`, but no personal textbooks or topic data. The agent prepares a topic using the [authoring and build guide](handbook/authoring.en.md), then outputs `dist/<topic>.html`, which opens directly in a browser. For revisions or additions, give the agent the current HTML: it is the authoritative body.
 
 <!-- readme-section: output -->
 ## Output and limitations
@@ -30,10 +30,11 @@ A fresh clone contains no sample textbooks or topic data. The agent prepares a t
 - A consistent academic layout with formulas, code, tables, references, and interactive experiments where useful.
 - Static diagrams and animated explanations where useful, drawn with inline SVG or other native browser features; play, pause, and reset without extra drawing dependencies.
 - Body text stored directly in editable HTML; static content remains readable with JavaScript disabled.
+- Four-color highlights, underlines, and paragraph notes with bold and formulas, browser storage, JSON backup/restore, and Markdown export.
 - The task determines the body language. The export shell supports Chinese and English; built-in experiments currently use mostly Chinese.
 - Authoring rules require research and fact checking, but build checks cannot establish scientific correctness. Review the final content; quality depends on the model, tool environment, and input material.
 
-The repository stores only the authoring workflow and reusable code. Source materials, internal records, topic data, and generated textbooks remain local and **require separate backups**.
+The repository stores the authoring workflow, reusable code, and the public style preview `example.html`. Source materials, internal records, topic data, and generated textbooks remain local and **require separate backups**.
 
 <!-- readme-section: documentation -->
 ## Documentation
@@ -49,14 +50,9 @@ The repository stores only the authoring workflow and reusable code. Source mate
 <!-- readme-section: style-example -->
 ## Style Example
 
-https://jyx114514.github.io/personal-html-book/example.html
+[View the style example online](https://jyx114514.github.io/personal-html-book/example.html), or download [example.html](example.html) from the repository and open it offline.
 
-<!-- readme-section: style-comparison -->
-## Style A/B testing (different content)
-
-https://jyx114514.github.io/personal-html-book/qpcr-ct-gpt6.1.html
-
-https://jyx114514.github.io/personal-html-book/rt-qpcr-ct-deepseek4.1.html
+The example shows the nested outline, formulas, code copying, tables, interactive experiments, native animated diagrams, and paragraph notes. Select body text to try highlights, underlines, and annotations. Notes support bold text, formulas, autosave, and import/export. This page demonstrates styling and interactions; it is not a complete PCR analysis guide.
 
 <!-- readme-section: license -->
 ## License

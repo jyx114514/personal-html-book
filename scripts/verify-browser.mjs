@@ -8,7 +8,7 @@ try {
   const browser = await launchBrowser(runtime)
   console.log(`浏览器环境检查通过：${runtime.browserName} ${browser.version()}`)
   await browser.close()
-  execFileSync(process.execPath, ['--test', '--test-concurrency=1', 'scripts/browser-shell.test.mjs', 'scripts/browser-diagrams.test.mjs'], { cwd: root, stdio: 'inherit' })
+  execFileSync(process.execPath, ['--test', '--test-concurrency=1', 'scripts/browser-shell.test.mjs', 'scripts/browser-diagrams.test.mjs', 'scripts/browser-annotations.test.mjs'], { cwd: root, stdio: 'inherit' })
   console.log('浏览器夹具回归通过（断网 file://、无外部请求、禁用 JavaScript 阅读及交互）；具体教材交付仍须运行 pnpm run verify:html。')
 } catch (error) {
   console.error(error.message)

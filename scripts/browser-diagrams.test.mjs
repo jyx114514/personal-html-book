@@ -31,6 +31,14 @@ test('native SVG diagrams work offline, without JS, with reduced motion, and acr
   await writeFile(path.join(content, 'one.md'), source)
   execFileSync(process.execPath, ['scripts/build-standalone.mjs', 'diagrams'], { cwd: fixture, stdio: 'pipe' })
   const file = path.join(fixture, 'dist/diagrams.html')
+  // Delivery checks must accept progressively enhanced animation controls,
+  // but still reject actual paragraph loss when JavaScript runs.
+  execFileSync(process.execPath, ['scripts/verify-native-html.mjs'], { cwd: fixture, stdio: 'pipe' })
+  const original = await readFile(file, 'utf8')
+  try {
+    await writeFile(file, original.replace('</body>', '<script>document.querySelector("article > p").remove()</script></body>'))
+    assert.throws(() => execFileSync(process.execPath, ['scripts/verify-native-html.mjs'], { cwd: fixture, stdio: 'pipe' }), error => /关闭 JavaScript 后可读正文发生变化/.test(String(error.stderr)))
+  } finally { await writeFile(file, original) }
   browser = await launchBrowser(runtime)
   const reportDir = path.join(root, 'internal/native-diagram-test')
   await mkdir(reportDir, { recursive: true })

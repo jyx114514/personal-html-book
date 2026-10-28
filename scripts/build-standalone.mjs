@@ -69,6 +69,9 @@ export async function renderLab(name, mode) { return renderToString(createSSRApp
 }
 
 const parserRequire = createRequire(import.meta.resolve('vue/compiler-sfc'))
+const mathRequire = createRequire(import.meta.resolve('markdown-it-mathjax3'))
+const mathRoot = path.dirname(mathRequire.resolve('mathjax-full/package.json'))
+const mathLicense = `/*! MathJax · Copyright (c) 2017-2022 The MathJax Consortium\n${await readFile(path.join(mathRoot, 'LICENSE'), 'utf8')}\n*/`
 const { parse: parseHtml } = parserRequire('@vue/compiler-dom')
 const modes = { OmicsLab: ['signal','tpm','methyl','hic','mass','flux'], ComputerLab: ['bits','float','address','layout','stack'], GradientDemo: [] }
 const clientBundles = new Map()
@@ -100,10 +103,11 @@ for (const island of Array.from(document.querySelectorAll<HTMLElement>('[data-co
   ].join('\n'))
   const client = await build({
     root, configFile: false, plugins: [vue()],
+    resolve: { alias: { 'mathjax-full': mathRoot } },
     define: { 'process.env.NODE_ENV': JSON.stringify('production') },
     build: { write: false, assetsInlineLimit: 10000000, cssCodeSplit: false,
       lib: { entry, name: 'CourseInteractions', formats: ['iife'] },
-      rollupOptions: { output: { inlineDynamicImports: true } } },
+      rollupOptions: { output: { inlineDynamicImports: true, banner: mathLicense } } },
   })
   const outputs = (Array.isArray(client) ? client : [client]).flatMap(result => result.output)
   const chunks = outputs.filter(file => file.type === 'chunk')
@@ -261,6 +265,7 @@ for (const topic of topics) {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="course-body-format" content="native-html-v1">
+  <meta name="course-topic" content="${topic}">
   <title>${title}</title>
   <style id="course-design-system">${css}</style>
   <style id="course-math-styles">${mathCss}</style>

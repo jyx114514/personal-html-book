@@ -7,8 +7,9 @@ export function mountCopyButtons(scope: ParentNode) {
     if (!block) continue
     button.type = 'button'
     if (!button.hasAttribute('aria-label')) button.setAttribute('aria-label', ui.copy)
-    const nativeLabel = !block.matches('div[class*="language-"]')
-    if (nativeLabel && !button.textContent?.trim()) button.textContent = ui.copy
+    if (!button.textContent?.trim() && !button.childElementCount) button.replaceChildren()
+    const usesTextLabel = !block.matches('div[class*="language-"]') || !!button.textContent?.trim()
+    if (usesTextLabel && !button.textContent?.trim()) button.textContent = ui.copy
     const originalLabel = Array.from(button.childNodes)
     const status = document.createElement('p')
     status.className = 'course-copy-status'
@@ -20,7 +21,7 @@ export function mountCopyButtons(scope: ParentNode) {
     let attempt = 0
     const resetFeedback = () => {
       button.classList.remove('copied')
-      if (nativeLabel) button.replaceChildren(...originalLabel)
+      if (usesTextLabel) button.replaceChildren(...originalLabel)
     }
     const announce = (text: string, visible = false) => {
       status.textContent = text
@@ -37,7 +38,7 @@ export function mountCopyButtons(scope: ParentNode) {
         await navigator.clipboard.writeText(code.textContent ?? '')
         if (current !== attempt) return
         button.classList.add('copied')
-        if (nativeLabel) button.textContent = ui.copied
+        if (usesTextLabel) button.textContent = ui.copied
         announce(ui.copied)
         timer = window.setTimeout(() => { resetFeedback(); announce('') }, 2000)
       } catch {

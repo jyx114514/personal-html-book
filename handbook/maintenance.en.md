@@ -49,7 +49,7 @@ pnpm run verify:html
 | Command | Coverage | What passing establishes |
 | --- | --- | --- |
 | `verify:static` | Documentation, types, full lint, model checks, isolated export and site builds | Static and build checks passed; offline usability remains unverified |
-| `verify:browser` | Chinese/English shell and SVG fixtures, offline `file://`, request monitoring, no JS, interactions, narrow viewports | Browser regression of the workflow passed, not acceptance of arbitrary textbooks |
+| `verify:browser` | Chinese/English shell, SVG, and annotation fixtures, offline `file://`, request monitoring, no JS, interactions, narrow viewports | Browser regression of the workflow passed, not acceptance of arbitrary textbooks |
 | `verify` | Both layers required; missing browsers fail | Complete local workflow verification passed |
 | `verify:html` | All current local `dist/` HTML files and manifests, copied for isolated verification | The current books listed in the report passed automated delivery checks; scientific content still requires review |
 
@@ -66,6 +66,12 @@ Screenshots and results are written to `internal/native-html-test/`. Browser ver
 Shell regression uses `node --test scripts/browser-shell.test.mjs` and is mandatory in default `verify`; an unset `COURSE_PLAYWRIGHT_DIR` never skips it. It creates Chinese and English fixtures and calls the production verifier for offline reading, no external requests, no JS, and body preservation; it also checks outline messages, custom labels, the component allowlist, and flux endpoints. Results are saved in `internal/test-feedback-browser/`.
 
 Native diagram regression uses `node --test scripts/browser-diagrams.test.mjs` and is also mandatory in default `verify`. It builds the authoring guide's SVG example and checks offline loading, static drawings without JavaScript, play/pause/resume/reset, keyboard controls, isolated figures, reduced motion, dark mode, 320/390-pixel viewports, and control initialization after site navigation. Screenshots, a demo HTML, and results go to `internal/native-diagram-test/`. Regular export regression also checks verbatim SVG import and repackaging, plus external resource references in drawing attributes and animation values.
+
+Delivery checks compare readable article text with JavaScript enabled and disabled, excluding only progressively revealed animation control labels. Diagrams, captions, and prose must remain available. Diagram regression accepts a valid animated page and injects a script that removes a paragraph to confirm genuine content loss still fails verification.
+
+Reading annotations use `scripts/annotations.test.mjs` and `scripts/browser-annotations.test.mjs`, included in default static and browser verification respectively. Coverage includes quote relocation and disambiguation, JSON validation and merging, deletion tombstones, offline marks, one-click color dots, mark popovers, autosave and caret preservation below paragraphs, expansion and collapse at every screen size, non-overlapping cards, bold and formula previews with offline rendering, invalid formulas and escapes, safe filtering, editing and undo, browser persistence and reopening, formatted JSON backup/restore and Markdown export, body preservation, missing-quote feedback, fallback marks, blocked or full storage, dark mode, and 320/390/800/1280/1440-pixel viewports. Screenshots, a report, and an openable `demo.html` are saved in `internal/annotation-test/`. Test notes belong only to fixtures and never enter textbook prose.
+
+Repeated-selection regression covers CSS highlights and fallback text marks: recoloring and pen changes reuse a record, writing again opens its existing note, the toolbar and number shortcuts retain the selection's style, unchanged operations add no undo step, and reopening or relocated source text still reuses the mark. Identical wording at separate locations and distinct overlapping selections stay independent.
 
 `pnpm run verify` first checks byte equality of Skill copies, AGENTS equality with the root Skill's single entry block, and bilingual section markers and runnable examples (translation meaning is not checked automatically). It then runs types, full lint, numeric checks, contract/export regression including site builds, and mandatory browser fixtures. The static command explicitly reports offline usability as unverified. Per the user's agreement, verification remains local and GitHub Actions stays disabled; absence of CI does not make local checks optional.
 
@@ -88,8 +94,9 @@ Git ignore rules only constrain current and future commits; they cannot withdraw
 | `scripts/` build and verification scripts, `standalone/` export runtime | `content/<topic>/` topic manifests and historical Markdown |
 | `docs/.vitepress/` site config, shared theme, interactive components | `docs/index.md`, `docs/chapters/`, `docs/public/` pages and assets |
 | Dependency manifests, lockfile, TypeScript config, local check scripts | `dist/` single-file textbooks, site cache and build output, deps and local config |
+| Root `example.html` public style and interaction preview | Other HTML, personal textbooks, and temporary comparisons |
 
-`content/` contributes only its `README.md`; `docs/` contributes only the config and shared theme code under `.vitepress/`, excluding caches and build output. HTML files are ignored too. Do not use `git add -f` to add textbooks or pages to this repository.
+`content/` contributes only its `README.md`; `docs/` contributes only the config and shared theme code under `.vitepress/`, excluding caches and build output. Root `example.html` is the explicitly retained public style preview and reuses current shared resources; all other HTML files are ignored. Do not use `git add -f` to add textbooks or pages to this repository.
 
 **Back up textbook bodies and local topic data separately.** This workflow repository does not back up or restore teaching content.
 

@@ -11,7 +11,7 @@ const correctness = {
 export default defineConfig([
   { ignores: ['internal/**', 'dist/**', '.standalone/**', 'docs/.vitepress/dist/**', 'docs/.vitepress/cache/**'] },
   {
-    files: ['scripts/**/*.mjs', 'eslint.config.mjs'],
+    files: ['scripts/**/*.mjs', 'standalone/**/*.mjs', 'eslint.config.mjs'],
     languageOptions: { globals: { ...globals.node, ...globals.browser } },
     rules: correctness,
   },

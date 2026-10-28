@@ -20,6 +20,8 @@ test('copy buttons write the actual clipboard and explain denied or unavailable 
     await mkdir(source, { recursive: true })
     await writeFile(path.join(source, 'manifest.json'), JSON.stringify({ topic, title: topic, lang: index ? 'zh-CN' : 'en', output: `${topic}.html`, chapters: ['one.md'] }))
     await writeFile(path.join(source, 'one.md'), '## Copy code\n\nStatic paragraph.\n\n[Public resource](https://example.org/resources/dataset)\n\n```js\nconst x = "a & b";\n```\n\n<div class="code">\n<div class="code-bar"><span class="code-lang">JS</span><button class="copy" aria-label="Custom native copy">Native copy</button></div>\n<pre><code>const native = 2;\n</code></pre>\n</div>\n')
+    const label = index ? '复制代码' : 'Copy code'
+    await writeFile(path.join(source, 'one.md'), `<div id="filled-copy" class="language-js"><button class="copy" aria-label="${label}"><span data-copy-label>${label}</span></button><span class="lang">js</span><pre><code>const explicit = 3;</code></pre></div>\n`, { flag: 'a' })
   }
   execFileSync(process.execPath, ['scripts/build-standalone.mjs', ...topics], { cwd: fixture, stdio: 'pipe' })
   execFileSync(process.execPath, ['scripts/verify-native-html.mjs'], { cwd: fixture, stdio: 'pipe' })
@@ -36,9 +38,15 @@ test('copy buttons write the actual clipboard and explain denied or unavailable 
       page.on('pageerror', error => errors.push(error.message))
       page.on('request', request => requests.push(request.url()))
       await page.goto(pathToFileURL(path.join(fixture, 'dist', `${topic}.html`)).href)
+      const originalLabel = await page.locator('#filled-copy [data-copy-label]').elementHandle()
       for (const block of await page.locator('div.language-js, .code').all()) {
         const button = block.locator('button.copy')
         const code = await block.locator('pre code').textContent()
+        const textLabel = !!(await button.textContent())?.trim()
+        const before = await button.evaluate(element => getComputedStyle(element, '::before').content)
+        assert.equal(Number(textLabel) + Number(!['none', 'normal', '""'].includes(before)), 1, 'Copy buttons must render exactly one label')
+        const bounds = await button.boundingBox(), pre = await block.locator('pre').boundingBox()
+        assert.ok(bounds.y + bounds.height <= pre.y, 'Copy label must stay above code')
         await page.evaluate(() => navigator.clipboard.writeText('Previous clipboard contents'))
         await button.focus()
         await button.press('Enter')
@@ -47,12 +55,17 @@ test('copy buttons write the actual clipboard and explain denied or unavailable 
         assert.ok(await button.evaluate(element => element.classList.contains('copied')))
         assert.equal(await block.locator('[role="status"]').textContent(), ui.copied)
         assert.equal(await block.locator('[role="status"]').getAttribute('aria-live'), 'polite')
-        if (await block.evaluate(element => element.classList.contains('code'))) assert.equal(await button.textContent(), ui.copied)
+        if (textLabel) {
+          assert.equal(await button.textContent(), ui.copied)
+          assert.ok(['none', 'normal', '""'].includes(await button.evaluate(element => getComputedStyle(element, '::before').content)))
+        }
         else assert.equal(await button.evaluate(element => getComputedStyle(element, '::before').content), JSON.stringify(ui.copied))
       }
       await page.waitForFunction(() => !document.querySelector('button.copy.copied'))
       assert.equal(await page.locator('.code button.copy').textContent(), 'Native copy')
       assert.equal(await page.locator('.code button.copy').getAttribute('aria-label'), 'Custom native copy')
+      assert.equal(await page.locator('#filled-copy [data-copy-label]').textContent(), index ? '复制代码' : 'Copy code')
+      assert.ok(await originalLabel.evaluate(node => node === document.querySelector('#filled-copy [data-copy-label]')), 'Reset must restore the original label nodes')
       for (const unavailable of [false, true]) {
         await page.evaluate(unavailable => Object.defineProperty(navigator, 'clipboard', {
           configurable: true,

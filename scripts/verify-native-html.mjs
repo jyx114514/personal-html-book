@@ -30,6 +30,16 @@ const extractBody = html => {
   return match[1]
 }
 const normalize = text => text.replace(/\s|\u200b/g, '')
+const readableArticleText = page => page.locator('article').evaluate(article => {
+  // Animation controls are progressively revealed by JS; their labels are UI,
+  // while the diagram, caption and surrounding prose must remain readable.
+  const controls = [...article.querySelectorAll('[data-course-animation-controls]')]
+  const hidden = controls.map(node => node.hidden)
+  try {
+    controls.forEach(node => { node.hidden = true })
+    return article.innerText
+  } finally { controls.forEach((node, index) => { node.hidden = hidden[index] }) }
+})
 try {
   for (const name of names) {
     const topic = name.slice(0, -5)
@@ -55,7 +65,7 @@ try {
     page.on('console', message => { if (message.type() === 'error') errors.push(message.text()) })
     page.on('request', request => requests.push(request.url()))
     await page.goto(pathToFileURL(standalonePath).href)
-    const bodyText = await page.locator('article').innerText()
+    const bodyText = await readableArticleText(page)
     const counts = {
       headings: await page.locator('article h2').count(),
       formulas: await page.locator('mjx-container svg').count(),
@@ -89,7 +99,7 @@ try {
     noJs.on('request', request => requests.push(request.url()))
     noJs.on('pageerror', error => errors.push(error.message))
     await noJs.goto(pathToFileURL(standalonePath).href)
-    assert.equal(normalize(await noJs.locator('article').innerText()), normalize(bodyText))
+    assert.equal(normalize(await readableArticleText(noJs)), normalize(bodyText), '关闭 JavaScript 后可读正文发生变化（动画控件不计入正文）')
     assert.equal(await noJs.locator('mjx-container svg').count(), counts.formulas)
     assert.equal(await noJs.locator('pre code').count(), counts.codeBlocks)
     assert.equal(await noJs.locator('aside nav a').count(), counts.navigation)

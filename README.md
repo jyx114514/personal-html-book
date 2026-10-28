@@ -22,7 +22,7 @@ pnpm run verify
 
 `verify` 现在必须通过离线浏览器夹具回归，不能只凭类型检查或构建通过。Playwright 已列入开发依赖；Windows 默认使用已有 Microsoft Edge，其他系统默认使用已安装的 Playwright Chromium。浏览器准备与失败处理见[维护指南](handbook/maintenance.md)。`verify:static` 仅用于静态排查，不能证明离线可用；具体教材构建后还需运行 `pnpm run verify:html` 验收当前文件。
 
-新克隆不包含教材示例或主题数据；agent 按[制作与构建指南](handbook/authoring.md)准备主题后，输出到 `dist/<topic>.html`，可直接用浏览器打开。后续修订或追加时，把当前 HTML 交给 agent；它是正文的权威版本。
+新克隆包含公开样式预览 `example.html`，不包含个人教材或主题数据；agent 按[制作与构建指南](handbook/authoring.md)准备主题后，输出到 `dist/<topic>.html`，可直接用浏览器打开。后续修订或追加时，把当前 HTML 交给 agent；它是正文的权威版本。
 
 <!-- readme-section: output -->
 ## 输出与边界
@@ -30,10 +30,11 @@ pnpm run verify
 - 统一的学术教材样式，支持公式、代码、表格、参考文献和按需加入的交互实验。
 - 按需用内嵌 SVG 等浏览器原生方式绘制静态图解或可播放、暂停、重置的动态讲解图片，无需额外绘图依赖。
 - 正文直接存储在 HTML 中，可编辑；关闭 JavaScript 仍能阅读静态内容。
+- 阅读时可四色高亮、划线和写段落笔记；笔记支持粗体和公式、本浏览器保存、JSON 备份恢复及 Markdown 导出。
 - 正文语言由任务指定；导出外壳支持中文和英文，内置实验目前主要使用中文。
 - 制作规范要求资料检索和事实核查，但构建检查不能判断科学结论是否正确；最终内容仍需审阅，质量受模型、工具环境和输入材料影响。
 
-仓库仅保存制作工作流与可复用代码。原始材料、内部记录、主题数据和生成教材保留在本地，**需要单独备份**。
+仓库保存制作工作流、可复用代码和公开样式预览 `example.html`。原始材料、内部记录、主题数据和生成教材保留在本地，**需要单独备份**。
 
 <!-- readme-section: documentation -->
 ## 文档入口
@@ -49,14 +50,9 @@ pnpm run verify
 <!-- readme-section: style-example -->
 ## 样式示例
 
-https://jyx114514.github.io/personal-html-book/example.html
+[在线查看样式示例](https://jyx114514.github.io/personal-html-book/example.html)，也可下载仓库中的 [example.html](example.html) 后离线打开。
 
-<!-- readme-section: style-comparison -->
-## 样式AB测（内容不同）
-
-https://jyx114514.github.io/personal-html-book/qpcr-ct-gpt6.1.html
-
-https://jyx114514.github.io/personal-html-book/rt-qpcr-ct-deepseek4.1.html
+示例展示层级目录、公式、代码复制、表格、交互实验、原生动态图解和段落笔记。选中正文可试用高亮、下划线与批注；笔记支持粗体、公式、自动保存及导入导出。示例仅用于展示样式和交互，不是完整的 PCR 分析指南。
 
 <!-- readme-section: license -->
 ## 许可

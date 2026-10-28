@@ -40,7 +40,10 @@ test('runtime bundles include only current experiment islands and re-export rech
   }
   assert.equal(scripts.native, scripts['native-again'], 'Equal component sets should share identical runtime bundles')
   assert.doesNotMatch(scripts.native, /__vueParentComponent/)
-  assert.ok(Buffer.byteLength(scripts.native) < Buffer.byteLength(scripts.mixed) / 4, 'A static textbook must not carry the Vue experiment runtime')
+  // Shared reader tools are present in every book; compare the omitted experiment payload.
+  // Both now include the offline TeX engine for reader-authored notes.
+  assert.ok(Buffer.byteLength(scripts.native) < 2_000_000, 'Shared reading and formula tools exceeded the offline runtime budget')
+  assert.ok(Buffer.byteLength(scripts.mixed) - Buffer.byteLength(scripts.native) > 60_000, 'Experiment-free output must omit the experiment payload')
   t.diagnostic(JSON.stringify({ runtimeBytes: Object.fromEntries(Object.entries(scripts).map(([topic, script]) => [topic, Buffer.byteLength(script)])) }))
   const nativeStyles = documents.native.match(/<style id="course-design-system">([\s\S]*?)<\/style>/)[1]
   assert.doesNotMatch(nativeStyles, /data-v-/)

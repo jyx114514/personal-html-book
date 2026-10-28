@@ -1,0 +1,521 @@
+import assert from 'node:assert/strict'
+import { test } from 'node:test'
+import { mkdir, readFile, writeFile, copyFile } from 'node:fs/promises'
+import { execFileSync } from 'node:child_process'
+import path from 'node:path'
+import { fileURLToPath, pathToFileURL } from 'node:url'
+import { createFixture } from './test-fixture.mjs'
+import { browserRuntime, launchBrowser } from './browser-runtime.mjs'
+
+const root = fileURLToPath(new URL('../', import.meta.url))
+const paragraph = 'A reversible note can cross multiple text nodes and remain anchored.'
+const source = `# Reading with notes
+
+## First chapter
+
+<p id="first">A reversible note can cross <strong>multiple text nodes</strong> and remain anchored.</p>
+
+<p id="second">Underline this separate sentence, then add a note to the next paragraph.</p>
+
+<p id="third">Learning improves when a reader connects ideas and records questions.</p>
+
+$x^2$ is still a static formula.
+
+\`\`\`js
+const answer = 42;
+\`\`\`
+
+## Next chapter
+
+Additional text for navigation. 本文支持离线高亮与笔记。
+
+<p id="same-a">Repeated sentence.</p>
+
+<p id="same-b">Repeated sentence.</p>
+`
+async function prepare(t) {
+  const { fixture, cleanup } = await createFixture()
+  t.after(cleanup)
+  for (const lang of ['zh', 'en']) {
+    const topic = `notes-${lang}`, folder = path.join(fixture, 'content', topic)
+    await mkdir(folder, { recursive: true })
+    await writeFile(path.join(folder, 'manifest.json'), JSON.stringify({ topic, title: 'Reading with notes', lang: lang === 'zh' ? 'zh-CN' : 'en', output: `${topic}.html`, chapters: ['one.md'] }))
+    await writeFile(path.join(folder, 'one.md'), source)
+  }
+  execFileSync(process.execPath, ['scripts/build-standalone.mjs', 'notes-zh', 'notes-en'], { cwd: fixture, stdio: 'pipe' })
+  const runtime = browserRuntime(), browser = await launchBrowser(runtime)
+  t.after(() => browser.close())
+  return { fixture, browser, runtime, url: lang => pathToFileURL(path.join(fixture, 'dist', `notes-${lang}.html`)).href }
+}
+async function select(page, selector, text) {
+  await page.locator(selector).scrollIntoViewIfNeeded()
+  await page.evaluate(({ selector, text }) => {
+    document.activeElement?.blur()
+    const host = document.querySelector(selector), whole = host.textContent
+    const start = text ? whole.indexOf(text) : 0, end = text ? start + text.length : whole.length
+    if (start < 0) throw new Error('Test quote missing')
+    const walker = document.createTreeWalker(host, NodeFilter.SHOW_TEXT), nodes = []
+    let offset = 0
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) { nodes.push({ node, start: offset, end: offset + node.length }); offset += node.length }
+    const first = nodes.find(item => item.end > start), last = [...nodes].reverse().find(item => item.start < end)
+    const range = document.createRange()
+    range.setStart(first.node, start - first.start)
+    range.setEnd(last.node, end - last.start)
+    const selection = getSelection()
+    selection.removeAllRanges(); selection.addRange(range)
+    document.dispatchEvent(new Event('selectionchange'))
+  }, { selector, text })
+  await page.getByRole('toolbar').waitFor({ state: 'visible' })
+}
+const stored = page => page.evaluate(() => JSON.parse(localStorage.getItem('course-annotations:v1:notes-zh')).records)
+async function clickFirstWord(page, selector) {
+  const point = await page.locator(selector).evaluate(host => {
+    const walker = document.createTreeWalker(host, NodeFilter.SHOW_TEXT)
+    let node = walker.nextNode()
+    while (node && !node.textContent.trim()) node = walker.nextNode()
+    const range = document.createRange(); range.setStart(node, 0); range.setEnd(node, Math.min(4, node.textContent.length))
+    const rect = range.getBoundingClientRect()
+    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+  })
+  await page.mouse.click(point.x, point.y)
+}
+async function more(page) {
+  const menu = page.locator('.course-notes-menu')
+  if (!await menu.evaluate(node => node.open)) await menu.locator('summary').click()
+}
+
+test('offline annotations persist, edit, export, import, reanchor, and preserve the authoritative body', async t => {
+  const { fixture, browser, runtime, url } = await prepare(t)
+  const context = await browser.newContext({ offline: true, viewport: { width: 1280, height: 900 } })
+  t.after(() => context.close())
+  const page = await context.newPage(), errors = [], requests = []
+  page.on('pageerror', error => errors.push(error.message))
+  page.on('request', request => requests.push(request.url()))
+  await page.goto(url('zh'))
+  const originalArticle = await page.locator('article').innerHTML()
+  const toolbar = page.getByRole('toolbar')
+  await select(page, '#first')
+  await toolbar.getByRole('button', { name: '青绿色', exact: true }).click()
+  assert.equal((await stored(page))[0].anchor.exact, paragraph)
+  assert.equal(await page.evaluate(() => CSS.highlights.get('course-note-teal-highlight').size), 1)
+  await select(page, '#second', 'Underline this separate sentence')
+  await toolbar.getByRole('button', { name: '下划线', exact: true }).click()
+  await select(page, '#third')
+  await toolbar.getByRole('button', { name: '笔记', exact: true }).click()
+  const panel = page.locator('.course-notes-panel'), editor = page.locator('.course-notes-editor')
+  await editor.getByRole('textbox', { name: '笔记内容' }).fill('Connect this idea to the previous chapter.')
+  await page.waitForFunction(() => JSON.parse(localStorage.getItem('course-annotations:v1:notes-zh')).records.some(row => row.note === 'Connect this idea to the previous chapter.'))
+  assert.equal(await panel.isVisible(), false, 'Writing a note must stay beside the quote without opening the overview')
+  assert.equal(await editor.getByRole('textbox').evaluate(node => document.activeElement === node), true, 'Autosave must preserve the typing caret')
+  await editor.getByRole('button', { name: '完成', exact: true }).click()
+  assert.equal((await stored(page)).filter(row => !row.deleted).length, 3)
+  await page.locator('.course-notes-toggle').click()
+  const third = panel.locator('.course-note-card').filter({ hasText: 'Learning improves' })
+  await third.getByRole('button', { name: '编辑', exact: true }).click()
+  const literalNote = 'A revised question. <img src="https://invalid.example/track" onerror="alert(1)">'
+  await editor.getByRole('textbox', { name: '笔记内容' }).fill(literalNote)
+  await editor.getByRole('button', { name: '蓝色', exact: true }).click()
+  await editor.getByRole('button', { name: '完成', exact: true }).click()
+  assert.equal(await third.locator('.course-note-text').textContent(), literalNote)
+  assert.equal(await panel.locator('img').count(), 0)
+  await panel.getByRole('button', { name: '搜索批注', exact: true }).click()
+  const search = panel.getByRole('searchbox')
+  await search.fill('revised')
+  assert.equal(await panel.locator('.course-note-card').count(), 1)
+  await search.fill('')
+  await panel.locator('.course-notes-filters select').selectOption('blue')
+  assert.equal(await panel.locator('.course-note-card').count(), 1)
+  await panel.locator('.course-notes-filters select').selectOption('')
+  await third.getByRole('button', { name: '删除', exact: true }).click()
+  assert.equal(await panel.locator('.course-note-card').count(), 2)
+  await more(page)
+  await panel.getByRole('button', { name: '撤销上次修改', exact: true }).click()
+  assert.equal(await panel.locator('.course-note-card').count(), 3)
+  const reportDir = path.join(root, 'internal/annotation-test')
+  await mkdir(reportDir, { recursive: true })
+  await page.screenshot({ path: path.join(reportDir, 'desktop-notes.png'), fullPage: true })
+  const [jsonDownload] = await Promise.all([page.waitForEvent('download'), panel.getByRole('button', { name: '导出 JSON', exact: true }).click()])
+  const exported = await readFile(await jsonDownload.path(), 'utf8')
+  assert.equal(JSON.parse(exported).records.filter(row => !row.deleted).length, 3)
+  const [mdDownload] = await Promise.all([page.waitForEvent('download'), panel.getByRole('button', { name: '导出 Markdown', exact: true }).click()])
+  const markdown = await readFile(await mdDownload.path(), 'utf8')
+  assert.match(markdown, /revised question/)
+  assert.match(markdown, /&lt;img/)
+  assert.equal(await page.locator('article').innerHTML(), originalArticle, 'CSS highlights must not rewrite body markup')
+  const beforeInvalid = await stored(page)
+  await panel.locator('input[type=file]').setInputFiles({ name: 'bad.json', mimeType: 'application/json', buffer: Buffer.from('{') })
+  await page.locator('.course-notes-toast').filter({ hasText: '无法导入' }).waitFor()
+  assert.deepEqual(await stored(page), beforeInvalid)
+  const book = path.join(fixture, 'dist/notes-zh.html')
+  const beforeRepack = await readFile(book, 'utf8')
+  execFileSync(process.execPath, ['scripts/build-standalone.mjs', 'notes-zh'], { cwd: fixture, stdio: 'pipe' })
+  const extract = html => html.match(/<!-- course:body:start -->\n([\s\S]*?)\n<!-- course:body:end -->/)[1]
+  assert.equal(extract(await readFile(book, 'utf8')), extract(beforeRepack))
+  await page.reload()
+  assert.equal((await stored(page)).filter(row => !row.deleted).length, 3)
+  await page.locator('.course-notes-toggle').click()
+  assert.equal(await page.locator('.course-note-card').count(), 3)
+  await page.getByRole('button', { name: '关闭笔记', exact: true }).click()
+  await page.emulateMedia({ colorScheme: 'dark' })
+  await page.screenshot({ path: path.join(reportDir, 'dark-highlights.png'), fullPage: true })
+  await page.emulateMedia({ colorScheme: 'light' })
+  for (const width of [390, 320]) {
+    await page.setViewportSize({ width, height: 844 })
+    await page.locator('.course-notes-toggle').click()
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
+    await page.getByRole('dialog').getByRole('button', { name: '编辑', exact: true }).first().focus()
+    await page.keyboard.press('Tab')
+    assert.ok(await page.getByRole('dialog').evaluate(dialog => dialog.contains(document.activeElement)))
+    await page.screenshot({ path: path.join(reportDir, `mobile-${width}.png`), fullPage: true })
+    await page.keyboard.press('Escape')
+    await page.getByRole('dialog').waitFor({ state: 'hidden' })
+  }
+  await page.setViewportSize({ width: 1280, height: 900 })
+  const restoredContext = await browser.newContext({ offline: true })
+  try {
+    const restored = await restoredContext.newPage()
+    await restored.goto(url('zh'))
+    await restored.locator('.course-notes-toggle').click()
+    await restored.locator('input[type=file]').setInputFiles({ name: 'backup.json', mimeType: 'application/json', buffer: Buffer.from(exported) })
+    await restored.locator('.course-note-card').nth(2).waitFor()
+    assert.equal((await stored(restored)).filter(row => !row.deleted).length, 3)
+    await restored.locator('input[type=file]').setInputFiles({ name: 'backup.json', mimeType: 'application/json', buffer: Buffer.from(exported) })
+    assert.equal((await stored(restored)).filter(row => !row.deleted).length, 3, 'Repeated imports must merge rather than duplicate')
+    await restored.goto(url('en'))
+    await restored.locator('.course-notes-toggle').click()
+    await restored.locator('input[type=file]').setInputFiles({ name: 'wrong-book.json', mimeType: 'application/json', buffer: Buffer.from(exported) })
+    await restored.locator('.course-notes-toast').filter({ hasText: 'Cannot import' }).waitFor()
+    assert.equal(await restored.locator('.course-note-card').count(), 0)
+  } finally { await restoredContext.close() }
+  const noJsContext = await browser.newContext({ offline: true, javaScriptEnabled: false })
+  try {
+    const noJs = await noJsContext.newPage()
+    await noJs.goto(url('zh'))
+    assert.equal(await noJs.locator('.course-notes-ui').count(), 0)
+    assert.equal(await noJs.locator('#first').innerText(), paragraph)
+    assert.equal(await noJs.locator('mjx-container svg').count(), 1)
+  } finally { await noJsContext.close() }
+  const changed = beforeRepack.replace('<article class="vp-doc">', '<article class="vp-doc">\n<p>Inserted introduction before the quoted text.</p>')
+  await writeFile(book, changed)
+  await page.reload()
+  await page.locator('.course-notes-toggle').click()
+  assert.equal(await page.locator('.course-note-orphan').count(), 0)
+  await writeFile(book, changed.replace(/<p id="first">[\s\S]*?<\/p>/, '<p id="first">This paragraph was replaced completely.</p>'))
+  await page.reload()
+  await page.locator('.course-notes-toggle').click()
+  assert.equal(await page.locator('.course-note-orphan').count(), 1)
+  assert.equal((await stored(page)).find(row => row.anchor.exact === paragraph).deleted, false)
+  await writeFile(book, beforeRepack)
+  await copyFile(book, path.join(reportDir, 'demo.html'))
+  assert.deepEqual(errors, [])
+  assert.deepEqual(requests.filter(url => /^https?:/.test(url)), [])
+  await writeFile(path.join(reportDir, 'results.json'), JSON.stringify({ browser: `${runtime.browserName} ${browser.version()}`, offline: true, persists: true, crossNodeSelection: true, reanchorsAfterInsertion: true, orphanRetained: true, jsonRoundTrip: true, markdown: true, noJavaScriptReadable: true, widths: [1280, 390, 320], darkMode: true }, null, 2))
+})
+
+test('compact tools mark in one click and notes stay below their paragraphs at every screen width', async t => {
+  const { browser, url } = await prepare(t)
+  const context = await browser.newContext({ offline: true, viewport: { width: 1280, height: 900 } })
+  t.after(() => context.close())
+  const page = await context.newPage(), errors = []
+  page.on('pageerror', error => errors.push(error.message))
+  await page.goto(url('zh'))
+  const toolbar = page.getByRole('toolbar'), menu = page.getByRole('dialog', { name: '划线操作', exact: true })
+  const reportDir = path.join(root, 'internal/annotation-test')
+  await mkdir(reportDir, { recursive: true })
+  await select(page, '#first')
+  assert.ok((await toolbar.boundingBox()).height <= 44, 'Selection toolbar should be one compact row')
+  await page.screenshot({ path: path.join(reportDir, 'compact-tools.png') })
+  await toolbar.getByRole('button', { name: '黄色', exact: true }).click()
+  assert.equal((await stored(page)).filter(row => !row.deleted).length, 1, 'A color dot must create the mark immediately')
+  await clickFirstWord(page, '#first')
+  await menu.waitFor()
+  await menu.getByRole('button', { name: '蓝色', exact: true }).click()
+  assert.equal((await stored(page))[0].color, 'blue')
+  await clickFirstWord(page, '#first')
+  await menu.getByRole('button', { name: '写笔记', exact: true }).click()
+  const editor = page.locator('.course-notes-editor')
+  await editor.getByRole('textbox').fill('划线以后，把自己的理解写在对应段落旁边。')
+  await page.waitForFunction(() => JSON.parse(localStorage.getItem('course-annotations:v1:notes-zh')).records.some(row => row.note.includes('对应段落旁边')))
+  assert.equal(await page.locator('.course-notes-panel').isVisible(), false)
+  assert.equal(await editor.getByRole('textbox').evaluate(node => document.activeElement === node), true)
+  const position = await editor.evaluate(node => ({ top: node.getBoundingClientRect().top, paragraphBottom: document.querySelector('#first').getBoundingClientRect().bottom, bottom: node.getBoundingClientRect().bottom, nextTop: document.querySelector('#second').getBoundingClientRect().top }))
+  assert.ok(position.top > position.paragraphBottom, 'Wide-screen editor belongs below its paragraph')
+  assert.ok(position.bottom < position.nextTop, 'The next paragraph must leave room for the editor')
+  await page.keyboard.press('Control+Enter')
+  await select(page, '#third')
+  await toolbar.getByRole('button', { name: '笔记', exact: true }).click()
+  await page.locator('.course-notes-editor textarea').fill('这条笔记跟随第三段，前后阅读时能直接对照。')
+  await page.keyboard.press('Control+Enter')
+  const cards = page.locator('.course-note-context .course-note-card')
+  assert.equal(await cards.count(), 2)
+  const bounds = await cards.evaluateAll(nodes => nodes.map(node => ({ top: node.getBoundingClientRect().top, bottom: node.getBoundingClientRect().bottom })))
+  assert.ok(bounds[1].top >= bounds[0].bottom + 12, 'Paragraph notes should not overlap')
+  await page.screenshot({ path: path.join(reportDir, 'paragraph-notes.png') })
+  await page.setViewportSize({ width: 390, height: 844 })
+  const pin = page.locator('.course-note-pin').first()
+  await pin.waitFor({ state: 'visible' })
+  const inline = page.locator('.course-inline-notes').first()
+  await inline.waitFor({ state: 'visible' })
+  await page.waitForFunction(() => [...document.querySelectorAll('.course-inline-notes:not([hidden]) .course-note-card')].every(node => {
+    const bounds = node.getBoundingClientRect()
+    return bounds.left >= 0 && bounds.right <= innerWidth
+  }))
+  await page.waitForFunction(() => document.querySelector('.course-inline-notes').getBoundingClientRect().bottom <= document.querySelector('#second').getBoundingClientRect().top)
+  await inline.getByRole('button', { name: '编辑', exact: true }).click()
+  await page.locator('.course-notes-editor textarea').fill('手机上直接在这段文字下方继续记笔记。')
+  await page.locator('#second').click()
+  await page.waitForFunction(() => JSON.parse(localStorage.getItem('course-annotations:v1:notes-zh')).records.some(row => row.note.includes('手机上直接')))
+  await page.locator('.course-notes-editor').waitFor({ state: 'hidden' })
+  await page.setViewportSize({ width: 320, height: 844 })
+  await page.waitForFunction(() => document.documentElement.scrollWidth <= innerWidth)
+  assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
+  await page.screenshot({ path: path.join(reportDir, 'inline-notes-320.png'), fullPage: true })
+  await pin.click()
+  assert.equal(await inline.isVisible(), false)
+  await page.setViewportSize({ width: 1440, height: 900 })
+  assert.equal(await inline.isVisible(), false, 'Collapsed state should survive resizing')
+  await pin.click()
+  assert.equal(await inline.isVisible(), true)
+  await page.setViewportSize({ width: 320, height: 844 })
+  await select(page, '#second', 'Underline this separate sentence')
+  assert.ok((await toolbar.boundingBox()).height <= 44)
+  await page.screenshot({ path: path.join(reportDir, 'compact-tools-320.png') })
+  await toolbar.getByRole('button', { name: '蓝色', exact: true }).click()
+  assert.deepEqual(errors, [])
+})
+
+test('bold and TeX notes preview, persist, export, import and render offline below paragraphs', async t => {
+  const { browser, url } = await prepare(t)
+  const context = await browser.newContext({ offline: true, viewport: { width: 1440, height: 1000 } })
+  t.after(() => context.close())
+  const page = await context.newPage(), errors = [], requests = []
+  page.on('pageerror', error => errors.push(error.message))
+  page.on('request', request => { if (/^https?:/.test(request.url())) requests.push(request.url()) })
+  await page.goto(url('zh'))
+  const body = await page.locator('article').innerHTML()
+  await select(page, '#first')
+  await page.getByRole('toolbar').getByRole('button', { name: '笔记', exact: true }).click()
+  const note = String.raw`**重点**：$E=mc^2$ 与 $\frac{a_i}{\sqrt{b}}$。
+$$\sum_{i=1}^{n} x_i^2 < 10$$
+无效公式保留：$\unknown{x}$；代码：` + '`**literal** $x$`' + String.raw`
+<img src="https://invalid.example/track" onerror="alert(1)">
+$\mmlToken{mi}[href="javascript:alert(1)"]{x}$`
+  const textarea = page.locator('.course-notes-editor textarea')
+  await textarea.fill(note)
+  await page.locator('.course-note-preview strong').waitFor()
+  assert.equal(await page.locator('.course-note-preview .course-note-math svg').count(), 4)
+  assert.equal(await textarea.inputValue(), note)
+  assert.ok(await textarea.evaluate(node => node === document.activeElement))
+  await page.keyboard.press('Control+Enter')
+  const displayed = page.locator('.course-inline-notes .course-note-text')
+  assert.equal(await displayed.locator('strong').textContent(), '重点')
+  assert.equal(await displayed.locator('.course-note-math svg').count(), 4)
+  assert.equal(await displayed.locator('.course-note-math.is-display').count(), 1)
+  assert.equal(await displayed.locator('code').textContent(), '**literal** $x$')
+  assert.match(await displayed.textContent(), /\$\\unknown\{x\}\$/)
+  assert.equal(await displayed.locator('img,script,a[href], [href^="javascript:"]').count(), 0)
+  assert.equal((await stored(page))[0].note, note)
+  assert.equal(await page.locator('article').innerHTML(), body)
+  for (const width of [1440, 1280, 800, 390, 320]) {
+    await page.setViewportSize({ width, height: 1000 })
+    await page.waitForFunction(() => {
+      const note = document.querySelector('.course-inline-notes'), first = document.querySelector('#first'), next = document.querySelector('#second')
+      return note.getBoundingClientRect().top > first.getBoundingClientRect().bottom && note.getBoundingClientRect().bottom <= next.getBoundingClientRect().top && document.documentElement.scrollWidth <= innerWidth
+    })
+    const size = await displayed.locator('svg').first().boundingBox()
+    assert.ok(size.width > 30 && size.height > 8, 'Formulas must keep their own size rather than inherit icon dimensions')
+  }
+  await page.emulateMedia({ colorScheme: 'dark' })
+  await page.screenshot({ path: path.join(root, 'internal/annotation-test/formatted-notes-320.png'), fullPage: true })
+  await page.reload()
+  assert.equal(await displayed.locator('strong').textContent(), '重点')
+  await page.locator('.course-notes-toggle').click()
+  const panel = page.locator('.course-notes-panel')
+  assert.equal(await panel.locator('.course-note-math svg').count(), 4)
+  await panel.getByRole('button', { name: '编辑', exact: true }).click()
+  assert.equal(await textarea.inputValue(), note, 'Editing must restore Markdown and TeX source')
+  await page.keyboard.press('Control+Enter')
+  await more(page)
+  const [jsonDownload] = await Promise.all([page.waitForEvent('download'), panel.getByRole('button', { name: '导出 JSON', exact: true }).click()])
+  const exported = await readFile(await jsonDownload.path(), 'utf8')
+  assert.equal(JSON.parse(exported).records[0].note, note)
+  const [mdDownload] = await Promise.all([page.waitForEvent('download'), panel.getByRole('button', { name: '导出 Markdown', exact: true }).click()])
+  const markdown = await readFile(await mdDownload.path(), 'utf8')
+  assert.ok(markdown.includes(String.raw`**重点**：$E=mc^2$ 与 $\frac{a_i}{\sqrt{b}}$。`))
+  assert.ok(markdown.includes(String.raw`$$\sum_{i=1}^{n} x_i^2 < 10$$`), 'Markdown export must preserve TeX inequalities')
+  const restoredContext = await browser.newContext({ offline: true })
+  try {
+    const restored = await restoredContext.newPage()
+    await restored.goto(url('zh'))
+    await restored.locator('.course-notes-toggle').click()
+    await restored.locator('input[type=file]').setInputFiles({ name: 'formatted.json', mimeType: 'application/json', buffer: Buffer.from(exported) })
+    await restored.locator('.course-note-text strong').waitFor()
+    assert.equal(await restored.locator('.course-notes-panel .course-note-math svg').count(), 4)
+  } finally { await restoredContext.close() }
+  assert.deepEqual(errors, [])
+  assert.deepEqual(requests, [])
+})
+
+test('fallback marks handle overlaps and blocked storage retains exportable notes with honest feedback', async t => {
+  const { browser, url } = await prepare(t)
+  for (const blocked of [false, true]) {
+    const context = await browser.newContext({ offline: true, viewport: { width: 390, height: 844 } })
+    try {
+      await context.addInitScript(blocked => {
+        Object.defineProperty(window, 'Highlight', { configurable: true, value: undefined })
+        if (blocked) Object.defineProperty(window, 'localStorage', { configurable: true, get() { throw new DOMException('Blocked', 'SecurityError') } })
+        else Storage.prototype.setItem = () => { throw new DOMException('Full', 'QuotaExceededError') }
+      }, blocked)
+      const page = await context.newPage(), errors = []
+      page.on('pageerror', error => errors.push(error.message))
+      await page.goto(url('en'))
+      const before = await page.locator('#first').textContent()
+      await select(page, '#first')
+      await page.getByRole('toolbar').getByRole('button', { name: 'Highlight', exact: true }).click()
+      assert.ok(await page.locator('mark[data-course-note-mark]').count() >= 3)
+      await select(page, '#first', 'multiple text nodes and remain')
+      await page.getByRole('toolbar').getByRole('button', { name: 'Underline', exact: true }).click()
+      assert.equal(await page.locator('mark mark').count(), 0)
+      assert.equal(await page.locator('#first').textContent(), before)
+      assert.equal(await page.locator('#first strong').textContent(), 'multiple text nodes')
+      await page.locator('.course-notes-toggle').click()
+      assert.equal(await page.locator('.course-note-card').count(), 2)
+      assert.match(await page.locator('.course-notes-storage').textContent(), /storage is unavailable or full/)
+      await page.locator('.course-note-card').first().getByRole('button', { name: 'Delete', exact: true }).click()
+      await more(page)
+      await page.getByRole('button', { name: 'Undo last change', exact: true }).click()
+      assert.equal(await page.locator('.course-note-card').count(), 2)
+      const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Export JSON', exact: true }).click()])
+      assert.equal(JSON.parse(await readFile(await download.path(), 'utf8')).records.filter(row => !row.deleted).length, 2)
+      assert.deepEqual(errors, [])
+    } finally { await context.close() }
+  }
+})
+
+test('reselecting the same range updates one mark and keeps its note across colors, pens and keyboard actions', async t => {
+  const { browser, url } = await prepare(t)
+  for (const fallback of [false, true]) {
+    const context = await browser.newContext({ offline: true, viewport: { width: 1280, height: 1000 } })
+    try {
+      if (fallback) await context.addInitScript(() => Object.defineProperty(window, 'Highlight', { configurable: true, value: undefined }))
+      const page = await context.newPage(), errors = [], requests = []
+      page.on('pageerror', error => errors.push(error.message))
+      page.on('request', request => { if (/^https?:/.test(request.url())) requests.push(request.url()) })
+      await page.goto(url('zh'))
+      const originalBody = await page.locator('article').innerHTML()
+      const toolbar = page.getByRole('toolbar')
+      const active = async () => (await stored(page)).filter(row => !row.deleted)
+      await select(page, '#first')
+      await toolbar.getByRole('button', { name: '黄色', exact: true }).click()
+      const first = (await active())[0]
+      await select(page, '#first')
+      await toolbar.getByRole('button', { name: '蓝色', exact: true }).click()
+      assert.equal((await active()).length, 1, 'Recoloring a reselected range must not create a second annotation')
+      assert.equal((await active())[0].id, first.id)
+      assert.equal((await active())[0].color, 'blue')
+      await page.locator('.course-notes-toast').getByRole('button', { name: '撤销', exact: true }).click()
+      assert.equal((await active()).length, 1)
+      assert.equal((await active())[0].color, 'yellow', 'Undo must restore the old color rather than remove the mark')
+      const beforeNoop = await stored(page)
+      await select(page, '#first')
+      await toolbar.getByRole('button', { name: '黄色', exact: true }).click()
+      assert.deepEqual(await stored(page), beforeNoop, 'Applying an unchanged pen must be a no-op')
+      await select(page, '#first')
+      await toolbar.getByRole('button', { name: '下划线', exact: true }).click()
+      assert.equal((await active()).length, 1)
+      assert.equal((await active())[0].style, 'underline')
+      await select(page, '#second')
+      await toolbar.getByRole('button', { name: '高亮', exact: true }).click()
+      await select(page, '#first')
+      assert.equal(await toolbar.getByRole('button', { name: '下划线', exact: true }).getAttribute('aria-pressed'), 'true')
+      assert.equal(await toolbar.getByRole('button', { name: '黄色', exact: true }).getAttribute('aria-pressed'), 'true')
+      await page.keyboard.press('4')
+      let current = (await active()).find(row => row.id === first.id)
+      assert.equal((await active()).length, 2)
+      assert.equal(current.style, 'underline', 'Keyboard recoloring must keep the selected mark style')
+      assert.equal(current.color, 'blue')
+      await select(page, '#first')
+      await toolbar.getByRole('button', { name: '笔记', exact: true }).click()
+      const note = '**保留原笔记**，以及 $x^2$。'
+      await page.locator('.course-notes-editor textarea').fill(note)
+      await page.keyboard.press('Control+Enter')
+      assert.equal((await active()).length, 2, 'Adding a note to a reselected mark must reuse that annotation')
+      await select(page, '#first')
+      await toolbar.getByRole('button', { name: '橙色', exact: true }).click()
+      current = (await active()).find(row => row.id === first.id)
+      assert.equal(current.note, note)
+      assert.equal(current.createdAt, first.createdAt)
+      assert.equal(current.color, 'orange')
+      await select(page, '#first')
+      await page.keyboard.press('Control+Alt+n')
+      assert.equal(await page.locator('.course-notes-editor textarea').inputValue(), note)
+      await page.keyboard.press('Control+Enter')
+      assert.equal((await active()).length, 2)
+      if (!fallback) assert.equal(await page.locator('article').innerHTML(), originalBody)
+      for (const [selector, color] of [['#same-a', '黄色'], ['#same-b', '蓝色'], ['#same-a', '橙色']]) {
+        await select(page, selector)
+        await toolbar.getByRole('button', { name: color, exact: true }).click()
+      }
+      const repeated = (await active()).filter(row => row.anchor.exact === 'Repeated sentence.').sort((a, b) => a.anchor.start - b.anchor.start)
+      assert.equal(repeated.length, 2, 'Identical wording in different locations must remain independent')
+      assert.equal(repeated[0].color, 'orange')
+      assert.equal(repeated[1].color, 'blue')
+      await page.locator('#first').evaluate(node => node.before(document.createTextNode('An inserted introduction. ')))
+      await select(page, '#first')
+      await toolbar.getByRole('button', { name: '青绿色', exact: true }).click()
+      assert.equal((await active()).length, 4, 'Relocated anchors must still reuse the original annotation')
+      assert.equal((await active()).find(row => row.id === first.id).color, 'teal')
+      await select(page, '#first', 'multiple text nodes and remain')
+      await toolbar.getByRole('button', { name: '下划线', exact: true }).click()
+      assert.equal((await active()).length, 5, 'A distinct overlapping selection must remain independent')
+      assert.equal(await page.locator('#first').textContent(), paragraph)
+      assert.equal(await page.locator('#first strong').textContent(), 'multiple text nodes')
+      assert.equal(await page.locator('mark mark').count(), 0)
+      await page.reload()
+      await select(page, '#first')
+      await toolbar.getByRole('button', { name: '蓝色', exact: true }).click()
+      assert.equal((await active()).length, 5)
+      assert.equal((await active()).find(row => row.id === first.id).note, note)
+      assert.equal((await active()).find(row => row.id === first.id).color, 'blue')
+      assert.deepEqual(errors, [])
+      assert.deepEqual(requests, [])
+    } finally { await context.close() }
+  }
+})
+
+test('cross-paragraph keyboard annotations and undo preserve notes added in another tab', async t => {
+  const { browser, url } = await prepare(t)
+  const context = await browser.newContext({ offline: true, viewport: { width: 1280, height: 900 } })
+  t.after(() => context.close())
+  const first = await context.newPage(), second = await context.newPage()
+  await first.goto(url('zh'))
+  await second.goto(url('zh'))
+  await first.evaluate(() => {
+    document.activeElement?.blur()
+    const range = document.createRange()
+    range.setStart(document.querySelector('#first').firstChild, 0)
+    range.setEnd(document.querySelector('#second').firstChild, 32)
+    const selection = getSelection()
+    selection.removeAllRanges(); selection.addRange(range)
+    document.dispatchEvent(new Event('selectionchange'))
+  })
+  await first.keyboard.press('Control+Alt+h')
+  assert.equal((await stored(first)).filter(row => !row.deleted).length, 1)
+  assert.match((await stored(first))[0].anchor.exact, /anchored\.[\s\S]*Underline this separate sentence/)
+  await second.waitForFunction(() => document.querySelector('.course-notes-toggle').textContent.includes('(1)'))
+  await select(second, '#third')
+  await second.getByRole('toolbar').getByRole('button', { name: '高亮', exact: true }).click()
+  await first.waitForFunction(() => document.querySelector('.course-notes-toggle').textContent.includes('(2)'))
+  await first.locator('.course-notes-toggle').click()
+  await more(first)
+  await first.getByRole('button', { name: '撤销上次修改', exact: true }).click()
+  const active = (await stored(first)).filter(row => !row.deleted)
+  assert.equal(active.length, 1)
+  assert.match(active[0].anchor.exact, /Learning improves/)
+  await first.keyboard.press('Escape')
+  assert.equal(await first.getByRole('dialog').isVisible(), false)
+  await second.waitForFunction(() => document.querySelector('.course-notes-toggle').textContent.includes('(1)'))
+  await second.locator('.course-notes-toggle').click()
+  await second.locator('.course-note-quote').click()
+  assert.equal(await second.locator('article').evaluate(article => article.contains(document.activeElement)), true)
+})
