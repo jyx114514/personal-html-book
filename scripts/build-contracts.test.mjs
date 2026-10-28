@@ -2,9 +2,27 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { renderMathWithTex } from './standalone-math.mjs'
 import { assertDocumentationCopies, assertAgentInstructions, renderAgentInstructions } from './documentation-sync.mjs'
-import { extractDiagramExample, extractInteractionScript, stripDiagramAnimation, parsePrivateTerms, assertNoPrivateReferences } from './verification-inputs.mjs'
+import { extractDiagramExample, extractInteractionScript, stripDiagramAnimation, parsePrivateTerms, assertNoPrivateReferences, assertNativeStructure } from './verification-inputs.mjs'
 import { execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
+
+test('native structure accepts equivalent attributes and rejects duplicate ids or broken outline targets', () => {
+  const html = '<nav id="course-outline-links"><a href="#%E7%AB%A0%E8%8A%82">Chapter</a></nav>' +
+    '<article id="body" class="extra vp-doc" data-edited="true"><h2 id="章节">Chapter</h2><p\n id="paragraph" class="prose">Readable.</p></article>'
+  assertNativeStructure(html)
+  for (const [invalid, message] of [
+    [html.replace('id="paragraph"', 'id="章节"'), /重复 ID/],
+    [html.replace('id="章节"', 'id="renamed"'), /没有公开正文目标/],
+    [html.replace('<h2', '<h2 data-course-outline="exclude"'), /没有公开正文目标/],
+    [html.replace('<h2', '<h2 class="computer-lab"'), /没有公开正文目标/],
+    [html.replace('<h2', '<h2 data-course-component="ComputerLab"'), /没有公开正文目标/],
+    [html.replace('<article', '<div id="outside">Outside</div><article').replace('#%E7%AB%A0%E8%8A%82', '#outside'), /没有公开正文目标/],
+    [html.replace('#%E7%AB%A0%E8%8A%82', '#missing'), /没有公开正文目标/],
+    [html.replace('#%E7%AB%A0%E8%8A%82', 'https://example.org/'), /无效目录链接/],
+    [html.replace(/<p[\s\S]*?<\/p>/, '<pre><code>&lt;p&gt;Example&lt;/p&gt;</code></pre>'), /缺少段落/],
+    [html.replace('extra vp-doc', 'extra'), /article.vp-doc/],
+  ]) assert.throws(() => assertNativeStructure(invalid, 'book.html'), message)
+})
 
 test('formula source injection fails immediately if upstream removes or duplicates the container/SVG', () => {
   const html = '<mjx-container><svg></svg></mjx-container><style>.MathJax{color:inherit}</style>'

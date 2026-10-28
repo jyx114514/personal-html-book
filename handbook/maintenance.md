@@ -59,6 +59,8 @@ pnpm run verify:html
 
 通用隐私检查解析 HTML 文本、注释和属性，按目录名边界识别本地 `sources/`、`internal/` 引用；`resources/` 等不同名称和公开参考 URL 中的同名目录不会误报。原始对话分享链接、本地绝对路径及内部检索标识仍会被拒绝，HTML 属性中的字符实体也会解码后检查。
 
+交付验收按 HTML 结构识别 `article.vp-doc` 和正文段落，允许合法的额外属性、类名及换行；同时检查保存的 HTML、启用及关闭 JavaScript 后的 DOM，拒绝重复 ID、目录目标缺失、目录链接到正文以外或被排除的实验区域。对应回归包含带属性正文通过以及损坏目录被拒的实际导出夹具。
+
 截图与结果写入 `internal/native-html-test/`。浏览器验收将当前 HTML 及清单复制到隔离夹具，在副本上验证追加与重新导出，进程中断也不会改动权威文件。临时夹具正常结束时自动清理，截图与报告保留；类型检查或构建成功不能代替实际浏览器验收。
 
 `verify:html` 默认使用项目依赖；兼容命令 `node scripts/verify-native-html.mjs <node_modules路径>` 的可选参数须直接包含 `playwright/`。缺少教材、清单、Playwright 或可用浏览器均以非零退出码停止，不产生验收成功报告。无 JavaScript 上下文同样监控资源请求，避免静态分支遗漏外部资源。

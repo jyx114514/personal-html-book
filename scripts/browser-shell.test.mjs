@@ -11,6 +11,32 @@ import { courseUi } from '../docs/.vitepress/theme/course-ui.mjs'
 const root = fileURLToPath(new URL('../', import.meta.url))
 const normalizeLineEndings = text => text.replace(/\r\n/g, '\n')
 
+test('delivery gate accepts attributed prose and rejects saved or runtime-broken chapter navigation', async t => {
+  const { fixture, cleanup } = await createFixture()
+  t.after(cleanup)
+  const topic = 'native-structure', source = path.join(fixture, 'content', topic)
+  await mkdir(source, { recursive: true })
+  await writeFile(path.join(source, 'manifest.json'), JSON.stringify({ topic, title: 'Native structure', output: `${topic}.html`, chapters: ['one.md'] }))
+  await writeFile(path.join(source, 'one.md'), '## First\n\n<p id="paragraph-a">First attributed paragraph.</p>\n\n## Second\n\n<p class="prose" id="paragraph-b">Second attributed paragraph.</p>\n')
+  execFileSync(process.execPath, ['scripts/build-standalone.mjs', topic], { cwd: fixture, stdio: 'pipe' })
+  const file = path.join(fixture, 'dist', `${topic}.html`)
+  const original = (await readFile(file, 'utf8')).replace('<article class="vp-doc">', '<article data-edited="true" class="extra vp-doc" id="native-article">')
+  const verify = () => execFileSync(process.execPath, ['scripts/verify-native-html.mjs'], { cwd: fixture, encoding: 'utf8', stdio: 'pipe' })
+  await writeFile(file, original)
+  assert.equal(JSON.parse(verify()).topics.length, 1)
+  assert.equal(await readFile(file, 'utf8'), original)
+  for (const [invalid, message] of [
+    [original.replace('id="second"', 'id="first"'), /重复 ID/],
+    [original.replace('id="second"', 'id="renamed"'), /没有公开正文目标/],
+    [original.replace('id="second"', 'data-course-outline="exclude" id="second"'), /没有公开正文目标/],
+    [original.replace('</body>', '<script>document.getElementById("second").id = "first"</script></body>'), /启用 JavaScript.*重复 ID/],
+  ]) {
+    await writeFile(file, invalid)
+    assert.throws(verify, error => error.status === 1 && message.test(String(error.stderr)))
+    assert.equal(await readFile(file, 'utf8'), invalid, 'Rejecting a textbook must not change its source')
+  }
+})
+
 test('copy buttons write the actual clipboard and explain denied or unavailable clipboard access', async t => {
   const { fixture, cleanup } = await createFixture()
   t.after(cleanup)

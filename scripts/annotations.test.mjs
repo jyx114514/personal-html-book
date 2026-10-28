@@ -5,7 +5,7 @@ import ts from 'typescript'
 
 const source = await readFile(new URL('../standalone/annotation-model.ts', import.meta.url), 'utf8')
 const compiled = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } }).outputText
-const { quoteAnchor, locateQuote, parseNoteFile, mergeNotes } = await import('data:text/javascript;base64,' + Buffer.from(compiled).toString('base64'))
+const { quoteAnchor, locateQuote, parseNoteFile, mergeNotes, maxActiveNotes, maxNoteFileLength } = await import('data:text/javascript;base64,' + Buffer.from(compiled).toString('base64'))
 const formatSource = await readFile(new URL('../standalone/annotation-format-model.ts', import.meta.url), 'utf8')
 const formatCompiled = ts.transpileModule(formatSource, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } }).outputText
 const { tokenizeNote, noteMarkdown } = await import('data:text/javascript;base64,' + Buffer.from(formatCompiled).toString('base64'))
@@ -73,4 +73,25 @@ test('merging preserves concurrent additions and deletion tombstones while newer
   assert.equal(mergeNotes([removed], [restored])[0].deleted, false)
   assert.deepEqual(mergeNotes([edited, other], [old]), mergeNotes([old], [edited, other]))
   assert.equal(old.note, 'A useful note.', 'Merging must not mutate existing records')
+})
+
+test('deleted annotations release capacity while tombstones still prevent stale backup resurrection', () => {
+  assert.throws(() => parseNoteFile(' '.repeat(maxNoteFileLength + 1), 'test-book'), /too large/)
+  const deleted = Array.from({ length: maxActiveNotes + 1 }, (_, i) => record({ id: `deleted-${i}`, deleted: true, updatedAt: 4 }))
+  const next = record({ id: 'new-note' })
+  const restored = parseNoteFile(file(mergeNotes(deleted, [next])), 'test-book').records
+  assert.equal(restored.length, deleted.length + 1)
+  assert.equal(restored.filter(row => !row.deleted).length, 1)
+  assert.equal(mergeNotes(restored, [record({ id: 'deleted-0' })]).find(row => row.id === 'deleted-0').deleted, true)
+
+  const full = Array.from({ length: maxActiveNotes }, (_, i) => record({ id: `active-${i}` }))
+  assert.equal(parseNoteFile(file(full), 'test-book').records.length, maxActiveNotes)
+  assert.throws(() => parseNoteFile(file([...full, next]), 'test-book'), /Too many active/)
+  assert.throws(() => mergeNotes(full, [next]), /Too many active/)
+  const removed = { ...full[0], deleted: true, updatedAt: 4 }
+  const afterDeletion = mergeNotes(full, [removed])
+  const replacement = mergeNotes(afterDeletion, [next])
+  assert.equal(parseNoteFile(file(replacement), 'test-book').records.filter(row => !row.deleted).length, maxActiveNotes)
+  assert.throws(() => mergeNotes(replacement, [{ ...full[0], updatedAt: 5 }]), /Too many active/)
+  assert.equal(full[0].deleted, false, 'Capacity checks and deletion merges must not mutate their inputs')
 })

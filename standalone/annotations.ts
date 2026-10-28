@@ -100,7 +100,7 @@ export function mountAnnotations(scope: ParentNode) {
   root.append(toggle, panel, toolbar, popover, toast); document.body.append(root)
   const context = createNoteContext(article, root, ui)
 
-  function nextTime() { return Math.max(Date.now(), ...records.map(row => row.updatedAt)) + 1 }
+  function nextTime() { return records.reduce((latest, row) => Math.max(latest, row.updatedAt), Date.now()) + 1 }
   function newId() { return globalThis.crypto?.randomUUID?.() ?? `note-${Date.now()}-${Math.random().toString(36).slice(2)}` }
   function rememberPen(style: NoteStyle, color: NoteColor) {
     preferredPen = style; penColors[style] = color

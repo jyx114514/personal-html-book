@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
+import { outlineExcludedClasses } from '../docs/.vitepress/theme/outline-model.mjs'
 
 const require = createRequire(import.meta.resolve('vue/compiler-sfc'))
 const { parse } = require('@vue/compiler-dom')
@@ -14,6 +15,35 @@ function elements(html, source) {
   return collect(tree).filter(node => node.type === 1)
 }
 const attribute = (node, name) => node.props.find(prop => prop.type === 6 && prop.name.toLowerCase() === name)
+
+export function assertNativeStructure(html, source = '独立 HTML') {
+  const nodes = elements(html, source)
+  const classes = node => attribute(node, 'class')?.value?.content.split(/\s+/) ?? []
+  const inside = (node, parent) => node.loc.start.offset >= parent.loc.start.offset && node.loc.end.offset <= parent.loc.end.offset
+  const articles = nodes.filter(node => node.tag.toLowerCase() === 'article' && classes(node).includes('vp-doc'))
+  assert.equal(articles.length, 1, `${source} 必须包含唯一的 article.vp-doc 静态正文。`)
+  const article = articles[0]
+  assert.ok(nodes.some(node => node.tag.toLowerCase() === 'p' && inside(node, article)), `${source} 的静态正文缺少段落。`)
+  const ids = new Map()
+  for (const node of nodes) {
+    const id = attribute(node, 'id')?.value?.content
+    if (!id) continue
+    assert.ok(!ids.has(id), `${source} 包含重复 ID：${id}`)
+    ids.set(id, node)
+  }
+  const nav = ids.get('course-outline-links')
+  assert.ok(nav?.tag.toLowerCase() === 'nav', `${source} 缺少 nav#course-outline-links 教材目录。`)
+  const excluded = nodes.filter(node => attribute(node, 'data-course-component') ||
+    attribute(node, 'data-course-outline')?.value?.content === 'exclude' || classes(node).some(name => outlineExcludedClasses.includes(name)))
+  for (const link of nodes.filter(node => node.tag.toLowerCase() === 'a' && inside(node, nav))) {
+    const href = attribute(link, 'href')?.value?.content ?? ''
+    assert.ok(href.startsWith('#') && href.length > 1, `${source} 包含无效目录链接：${href}`)
+    let id = href.slice(1)
+    try { id = decodeURIComponent(id) } catch { /* Match the runtime's literal-hash fallback. */ }
+    const target = ids.get(id)
+    assert.ok(target && inside(target, article) && !excluded.some(node => inside(target, node)), `${source} 的目录链接没有公开正文目标：${href}`)
+  }
+}
 
 export function assertNoPrivateReferences(html, source = '独立 HTML') {
   function inspect(value) {

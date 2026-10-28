@@ -8,7 +8,13 @@ export type ReadingNote = {
 }
 export type NoteFile = { schema: 'course-annotations/v1'; bookId: string; records: ReadingNote[] }
 export const maxNoteFileLength = 40_000_000
-export const maxNoteRecords = 2000
+// Deletion tombstones preserve backup/merge semantics without consuming the
+// reader's active-note allowance. The serialized file still has a size limit.
+export const maxActiveNotes = 2000
+
+function assertNoteCapacity(records: ReadingNote[]) {
+  if (records.filter(row => !row.deleted).length > maxActiveNotes) throw new Error('Too many active annotations')
+}
 
 export function quoteAnchor(text: string, start: number, end: number): QuoteAnchor | null {
   if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 0 || end > text.length) return null
@@ -40,7 +46,7 @@ export function locateQuote(text: string, anchor: QuoteAnchor): { start: number;
 export function parseNoteFile(raw: string, bookId: string): NoteFile {
   if (raw.length > maxNoteFileLength) throw new Error('Annotation file is too large')
   const value = JSON.parse(raw)
-  if (!value || value.schema !== 'course-annotations/v1' || value.bookId !== bookId || !Array.isArray(value.records) || value.records.length > maxNoteRecords) throw new Error('Invalid annotation file or textbook identity')
+  if (!value || value.schema !== 'course-annotations/v1' || value.bookId !== bookId || !Array.isArray(value.records)) throw new Error('Invalid annotation file or textbook identity')
   const ids = new Set<string>()
   const string = (input: unknown, max: number, min = 0): input is string => typeof input === 'string' && input.length >= min && input.length <= max
   const integer = (input: unknown): input is number => Number.isSafeInteger(input) && Number(input) >= 0
@@ -55,6 +61,7 @@ export function parseNoteFile(raw: string, bookId: string): NoteFile {
     ids.add(row.id)
     return { id: row.id, anchor: { start: anchor.start, end: anchor.end, exact: anchor.exact, prefix: anchor.prefix, suffix: anchor.suffix }, color: row.color, style: row.style, note: row.note, createdAt: row.createdAt, updatedAt: row.updatedAt, deleted: row.deleted }
   })
+  assertNoteCapacity(records)
   return { schema: 'course-annotations/v1', bookId, records }
 }
 
@@ -64,6 +71,7 @@ export function mergeNotes(left: ReadingNote[], right: ReadingNote[]): ReadingNo
     const previous = merged.get(row.id)
     if (!previous || row.updatedAt > previous.updatedAt || (row.updatedAt === previous.updatedAt && (row.deleted && !previous.deleted || row.deleted === previous.deleted && JSON.stringify(row) > JSON.stringify(previous)))) merged.set(row.id, row)
   }
-  if (merged.size > maxNoteRecords) throw new Error('Too many annotations')
-  return [...merged.values()].sort((a, b) => a.id.localeCompare(b.id))
+  const records = [...merged.values()]
+  assertNoteCapacity(records)
+  return records.sort((a, b) => a.id.localeCompare(b.id))
 }

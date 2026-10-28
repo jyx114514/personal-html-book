@@ -6,7 +6,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 
 import { createFixture } from './test-fixture.mjs'
 import { browserRuntime, launchBrowser } from './browser-runtime.mjs'
-import { extractInteractionScript, parsePrivateTerms, assertNoPrivateReferences } from './verification-inputs.mjs'
+import { extractInteractionScript, parsePrivateTerms, assertNoPrivateReferences, assertNativeStructure } from './verification-inputs.mjs'
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 function fail(message) { console.error('浏览器验收失败：' + message); process.exit(1) }
 let forbidden
@@ -45,6 +45,7 @@ try {
     const topic = name.slice(0, -5)
     const originalPath = path.join(root, 'dist', name)
     const original = await readFile(originalPath, 'utf8')
+    assertNativeStructure(original, name)
     const js = extractInteractionScript(original, name)
     assert.ok(extractBody(original) !== undefined, 'Missing editable body markers')
     const manifest = JSON.parse(await readFile(path.join(root, 'content', topic, 'manifest.json'), 'utf8'))
@@ -78,9 +79,6 @@ try {
     // Accept both current container attributes and historical v5 source wrappers.
     assert.equal(await page.locator('mjx-container[data-tex], [id^="mjx-"][data-tex]').count(), counts.formulas)
     assert.equal(await page.locator('.course-table-scroll .course-table-scroll').count(), 0)
-    const staticBody = extractBody(original)
-    assert.match(staticBody, /<article class="vp-doc">/)
-    assert.match(staticBody, /<p>/)
     const prose = await page.locator('article > p, article > section > p').allTextContents()
     for (const text of prose.filter(text => text.trim().length >= 80)) assert.ok(!js.includes(text.trim()), 'Article prose embedded in runtime')
     assertNoPrivateReferences(original, name)
@@ -99,7 +97,9 @@ try {
     noJs.on('request', request => requests.push(request.url()))
     noJs.on('pageerror', error => errors.push(error.message))
     await noJs.goto(pathToFileURL(standalonePath).href)
+    assertNativeStructure(await noJs.content(), `${name}（关闭 JavaScript）`)
     assert.equal(normalize(await readableArticleText(noJs)), normalize(bodyText), '关闭 JavaScript 后可读正文发生变化（动画控件不计入正文）')
+    assertNativeStructure(await page.content(), `${name}（启用 JavaScript）`)
     assert.equal(await noJs.locator('mjx-container svg').count(), counts.formulas)
     assert.equal(await noJs.locator('pre code').count(), counts.codeBlocks)
     assert.equal(await noJs.locator('aside nav a').count(), counts.navigation)
