@@ -146,7 +146,8 @@ test('real exporter assigns book-wide anchors and preserves human revisions and 
   assert.match(original, /href="#mechanism"/)
   assert.match(original, /href="#edge-case"/)
   assert.doesNotMatch(original, /href="#lab-silent"/)
-  const revised = original.replace('First chapter.', 'Human revision that must survive.')
+  const manualSpan = '<span id="human-inline" style="color: red;" data-editor="manual">人工说明<span title="A &amp; B">嵌套强调</span></span><span id="human-anchor"></span>'
+  const revised = original.replace('First chapter.', 'Human revision that must survive. ' + manualSpan)
   const end = revised.lastIndexOf('</article>')
   const appended = revised.slice(0, end) + '<h2 id="appended">Appended chapter</h2>\n<p>New material.</p>\n' + revised.slice(end)
   assert.equal(appended.slice(0, end), revised.slice(0, end))
@@ -163,6 +164,11 @@ test('real exporter assigns book-wide anchors and preserves human revisions and 
     return match[1]
   }
   assert.equal(body(refreshed), body(appended), 'Resource refresh changed revised or appended body')
+  assert.ok(refreshed.includes(manualSpan), 'Resource refresh removed or rewrote manual spans, attributes, nesting or emphasis')
+  const unclosedSpan = refreshed.replace(manualSpan, manualSpan.replace('嵌套强调</span></span>', '嵌套强调</span>'))
+  await writeFile(target, unclosedSpan)
+  assert.throws(() => build(), error => /missing end tag/i.test(String(error.stderr)))
+  assert.equal(await readFile(target, 'utf8'), unclosedSpan, 'An unclosed manual tag must fail without silently deleting it')
   const invalid = refreshed.replace('</article>', "<img src='missing.png'></article>")
   await writeFile(target, invalid)
   assert.throws(() => build(), error => /External resource reference/.test(String(error.stderr)))

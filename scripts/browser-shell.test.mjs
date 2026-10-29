@@ -17,7 +17,8 @@ test('delivery gate accepts attributed prose and rejects saved or runtime-broken
   const topic = 'native-structure', source = path.join(fixture, 'content', topic)
   await mkdir(source, { recursive: true })
   await writeFile(path.join(source, 'manifest.json'), JSON.stringify({ topic, title: 'Native structure', output: `${topic}.html`, chapters: ['one.md'] }))
-  await writeFile(path.join(source, 'one.md'), '## First\n\n<p id="paragraph-a">First attributed paragraph.</p>\n\n## Second\n\n<p class="prose" id="paragraph-b">Second attributed paragraph.</p>\n')
+  const manualSpan = '<span id="manual-emphasis" style="color: red;" data-editor="manual">Human <span title="Nested note">emphasis</span></span>'
+  await writeFile(path.join(source, 'one.md'), '## First\n\n<p id="paragraph-a">First attributed paragraph. ' + manualSpan + '</p>\n\n## Second\n\n<p class="prose" id="paragraph-b">Second attributed paragraph.</p>\n')
   execFileSync(process.execPath, ['scripts/build-standalone.mjs', topic], { cwd: fixture, stdio: 'pipe' })
   const file = path.join(fixture, 'dist', `${topic}.html`)
   const original = (await readFile(file, 'utf8')).replace('<article class="vp-doc">', '<article data-edited="true" class="extra vp-doc" id="native-article">')
@@ -25,6 +26,20 @@ test('delivery gate accepts attributed prose and rejects saved or runtime-broken
   await writeFile(file, original)
   assert.equal(JSON.parse(verify()).topics.length, 1)
   assert.equal(await readFile(file, 'utf8'), original)
+  assert.ok(original.includes(manualSpan))
+  const browser = await launchBrowser(browserRuntime())
+  t.after(() => browser.close())
+  for (const javaScriptEnabled of [true, false]) {
+    const context = await browser.newContext({ offline: true, javaScriptEnabled })
+    try {
+      const page = await context.newPage()
+      await page.goto(pathToFileURL(file).href)
+      const span = page.locator('#manual-emphasis')
+      assert.equal(await span.evaluate(node => node.outerHTML), manualSpan)
+      assert.equal(await span.evaluate(node => getComputedStyle(node).color), 'rgb(255, 0, 0)')
+      assert.notEqual(await page.locator('#second').evaluate(node => getComputedStyle(node).color), 'rgb(255, 0, 0)', 'Manual emphasis must not leak into the next heading')
+    } finally { await context.close() }
+  }
   for (const [invalid, message] of [
     [original.replace('id="second"', 'id="first"'), /重复 ID/],
     [original.replace('id="second"', 'id="renamed"'), /没有公开正文目标/],
