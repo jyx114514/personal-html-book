@@ -70,7 +70,7 @@ export function iconButton(label: string, name: IconName, action: () => void, vi
   if (visibleText) node.append(element('span', visibleText))
   return node
 }
-export function colorDots(ui: AnnotationUi, selected: NoteColor, action: (color: NoteColor) => void) {
+export function colorDots(ui: AnnotationUi, selected: NoteColor | undefined, action: (color: NoteColor) => void) {
   const group = element('div', '', 'course-note-palette')
   group.setAttribute('role', 'group')
   group.setAttribute('aria-label', ui.color)

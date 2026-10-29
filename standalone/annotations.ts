@@ -20,11 +20,9 @@ export function mountAnnotations(scope: ParentNode) {
   const readStored = () => { const raw = localStorage.getItem(storageKey); return raw ? parseNoteFile(raw, bookId).records : [] }
   try { records = readStored() } catch { storageFailed = true }
   let preferredPen: NoteStyle = 'highlight'
-  const penColors: Record<NoteStyle, NoteColor> = { highlight: 'yellow', underline: 'yellow' }
   try {
     const pref = JSON.parse(localStorage.getItem(`${storageKey}:pens`) || 'null')
     if (pref?.pen === 'highlight' || pref?.pen === 'underline') preferredPen = pref.pen
-    for (const style of ['highlight', 'underline'] as const) if (noteColors.includes(pref?.[style])) penColors[style] = pref[style]
   } catch { /* Preferences do not replace the note store. */ }
   const history: History[] = [], expanded = new Set<string>()
   let ranges = new Map<string, Range>(), pending: QuoteAnchor | null = null
@@ -102,9 +100,9 @@ export function mountAnnotations(scope: ParentNode) {
 
   function nextTime() { return records.reduce((latest, row) => Math.max(latest, row.updatedAt), Date.now()) + 1 }
   function newId() { return globalThis.crypto?.randomUUID?.() ?? `note-${Date.now()}-${Math.random().toString(36).slice(2)}` }
-  function rememberPen(style: NoteStyle, color: NoteColor) {
-    preferredPen = style; penColors[style] = color
-    try { localStorage.setItem(`${storageKey}:pens`, JSON.stringify({ pen: style, ...penColors })) } catch { /* Notes report storage failures independently. */ }
+  function rememberPen(style: NoteStyle) {
+    preferredPen = style
+    try { localStorage.setItem(`${storageKey}:pens`, JSON.stringify({ pen: style })) } catch { /* Notes report storage failures independently. */ }
     renderToolbar()
   }
   function announce(text: string, persistent = false, canUndo = false) {
@@ -252,7 +250,7 @@ export function mountAnnotations(scope: ParentNode) {
   function openEditor(target: ReadingNote | QuoteAnchor, origin: Origin = panel.open ? 'panel' : 'context') {
     finishEditing(); popover.hidden = true; toolbar.hidden = true
     const stamp = nextTime()
-    const row: ReadingNote = 'id' in target ? records.find(item => item.id === target.id) ?? target : noteForSelection(article!, target, records) ?? { id: newId(), anchor: target, color: penColors[preferredPen], style: preferredPen, note: '', createdAt: stamp, updatedAt: stamp, deleted: false }
+    const row: ReadingNote = 'id' in target ? records.find(item => item.id === target.id) ?? target : noteForSelection(article!, target, records) ?? { id: newId(), anchor: target, color: 'yellow', style: preferredPen, note: '', createdAt: stamp, updatedAt: stamp, deleted: false }
     editing = { id: row.id, origin, group: `edit-${row.id}-${stamp}` }; editor = createEditor(row, origin); getSelection()?.removeAllRanges()
     if (!records.some(item => item.id === row.id)) commitRecord(row, editing.group); else refresh(true)
     const textarea = editor?.querySelector('textarea'); textarea?.focus({ preventScroll: true })
@@ -287,19 +285,20 @@ export function mountAnnotations(scope: ParentNode) {
     const controls = element('div', '', 'course-mark-tools')
     const patch = (next: Partial<ReadingNote>) => {
       const current = records.find(item => item.id === row.id) ?? row
-      rememberPen(next.style ?? current.style, next.color ?? current.color)
+      rememberPen(next.style ?? current.style)
       commitRecord({ ...current, ...next, updatedAt: nextTime() }); popover.hidden = true
     }
     controls.append(penButtons(ui, row.style, style => patch({ style })), colorDots(ui, row.color, color => patch({ color })))
     const actions = element('div', '', 'course-note-actions'); actions.append(button(ui.write, () => openEditor(row)), button(ui.remove, () => removeNote(row)))
     popover.replaceChildren(controls, actions); popover.hidden = false; position(popover, { left: x, right: x, top: y - 6, bottom: y + 6 })
   }
-  function addMark(style: NoteStyle, color = penColors[style]) {
+  function addMark(style: NoteStyle, color?: NoteColor) {
     if (!pending) return
     const anchor = pending
     finishEditing()
     const previous = noteForSelection(article!, anchor, records), stamp = nextTime()
-    rememberPen(style, color)
+    color ??= previous?.color ?? 'yellow'
+    rememberPen(style)
     const changed = !previous || previous.color !== color || previous.style !== style || JSON.stringify(previous.anchor) !== JSON.stringify(anchor)
     if (changed) {
       const row: ReadingNote = previous ? { ...previous, anchor, color, style, updatedAt: stamp } : { id: newId(), anchor, color, style, note: '', createdAt: stamp, updatedAt: stamp, deleted: false }
@@ -311,7 +310,7 @@ export function mountAnnotations(scope: ParentNode) {
   function renderToolbar() {
     const previous = pending ? noteForSelection(article!, pending, records) : undefined
     const style = previous?.style ?? preferredPen
-    toolbar.replaceChildren(penButtons(ui, style, next => addMark(next)), colorDots(ui, previous?.color ?? penColors[style], color => addMark(style, color)),
+    toolbar.replaceChildren(penButtons(ui, style, next => addMark(next)), colorDots(ui, previous?.color, color => addMark(style, color)),
       iconButton(ui.add, 'note', () => { if (pending) openEditor(pending) }, ui.add), iconButton(ui.copy, 'copy', async () => {
         if (!pending) return
         try { await navigator.clipboard.writeText(pending.exact); toolbar.hidden = true; getSelection()?.removeAllRanges(); announce(ui.copied) } catch { announce(ui.copyFailed, true) }
