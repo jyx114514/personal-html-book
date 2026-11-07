@@ -13,7 +13,7 @@ const root = fileURLToPath(new URL('../', import.meta.url))
 export const demoGene = {
   name: '教学质粒 · 合成示意', sequence: 'ATGCGT'.repeat(200), topology: 'circular',
   features: [
-    { name: '启动子示意', start: 40, end: 180, strand: 1, description: '教学注释，不代表此序列具有真实启动子功能。' },
+    { name: '启动子示意', start: 40, end: 180, strand: 1, color: '#8ad08a', description: '教学注释，不代表此序列具有真实启动子功能。' },
     { name: 'CDS 示意', start: 240, end: 780, strand: 1, description: '用注释区间说明方向和坐标，未作功能预测。' },
     { name: '反向特征', start: 840, end: 1080, strand: -1 },
     { name: '跨起点特征', start: 1150, end: 30, strand: -1 },
@@ -105,16 +105,27 @@ test('gene viewer works offline with static fallback, selection, search, clipboa
   assert.equal(await viewer.locator('[data-gene-copy-fallback]').inputValue(), demoGene.sequence.slice(2, 8))
   await viewer.locator('[data-gene-reset]').click()
   await viewer.locator('[data-gene-view="circular"]').click()
+  assert.equal(await viewer.locator('[data-gene-feature="0"] .gene-arc').getAttribute('fill'), '#8ad08a', 'Authored colors must survive view switches')
   for (const width of [2560, 1920, 1440, 800, 390, 320]) {
     await page.setViewportSize({ width, height: 1050 })
     for (const colorScheme of ['light', 'dark']) {
       await page.emulateMedia({ colorScheme })
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth), false, `${width} ${colorScheme} overflow`)
-      if (width >= 1440) assert.ok((await viewer.locator('[data-gene-map]').boundingBox()).width <= 480, 'Wide screens must not enlarge the plasmid map without a limit')
+      if (width >= 1440) assert.ok((await viewer.locator('[data-gene-map]').boundingBox()).width > 700, 'The detailed map should have enough room for its labels')
+      assert.equal(await viewer.locator('.gene-backbone').count(), 2)
+      assert.equal(await viewer.locator('[data-gene-map-label]').count(), demoGene.features.length)
       await viewer.screenshot({ path: path.join(directory, `${width}-${colorScheme}.png`) })
     }
   }
   assert.deepEqual(errors, [])
+  const beforeZoom = (await viewer.locator('[data-gene-map] svg').boundingBox()).width
+  await viewer.locator('[data-gene-zoom="in"]').click()
+  assert.equal(await viewer.locator('[data-gene-zoom-label]').innerText(), '120%')
+  assert.ok((await viewer.locator('[data-gene-map] svg').boundingBox()).width > beforeZoom * 1.15, 'Zoom must enlarge the map even on a narrow screen')
+  await viewer.locator('[data-gene-zoom="out"]').click()
+  assert.equal(await viewer.locator('[data-gene-zoom-label]').innerText(), '100%')
+  await viewer.locator('[data-gene-zoom="fit"]').click()
+  assert.ok(await viewer.locator('[data-gene-map]').evaluate(map => map.scrollWidth <= map.clientWidth + 1))
   assert.deepEqual(requests.filter(url => !url.startsWith('file:')), [])
   assert.equal(requests.filter(url => url.startsWith('file:') && !url.endsWith('.html')).length, 0)
   await context.close()

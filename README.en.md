@@ -27,10 +27,12 @@ A fresh clone includes the public style preview `example.html`, but no personal 
 <!-- readme-section: output -->
 ## Output and limitations
 
-- A consistent academic layout with formulas, code, tables, references, and interactive experiments where useful.
+- An established academic style with warm paper, teal accents, serif headings and dark mode. Standalone content expands on wide screens; phones use a collapsible top outline.
+- Formulas, code, tables, references and interactive experiments where useful. Markdown imports support strong emphasis beside CJK punctuation and inside HTML panels.
 - Static diagrams and animated explanations where useful, drawn with inline SVG or other native browser features; play, pause, and reset without extra drawing dependencies.
 - Body text stored directly in editable HTML; static content remains readable with JavaScript disabled.
 - Four-color highlights, underlines, and paragraph notes with bold and formulas, browser storage, JSON backup/restore, and Markdown export.
+- An offline Gene viewer with SnapGene-style circular maps, linear maps, authored feature colors, separated labels, zoom, double-stranded sequence, search, selection copying and reverse complements. See the [authoring guide](handbook/authoring.en.md). It uses supplied sequences and annotations; it does not predict genes or restriction sites, or open `.dna` files directly.
 - The task determines the body language. The export shell supports Chinese and English; built-in experiments currently use mostly Chinese.
 - Authoring rules require research and fact checking, but build checks cannot establish scientific correctness. Review the final content; quality depends on the model, tool environment, and input material.
 
@@ -43,7 +45,7 @@ The repository stores the authoring workflow, reusable code, and the public styl
 | --- | --- |
 | [AGENTS.md](AGENTS.md) | Generated Agent entry point and rule navigation from SKILL (Chinese) |
 | [SKILL.md](SKILL.md) | Content structure, source checking, visual and delivery rules (Chinese) |
-| [Authoring and build guide](handbook/authoring.en.md) | Manifests, first import, HTML editing, asset packaging, and site mode |
+| [Authoring and build guide](handbook/authoring.en.md) | Fixed default style, manifests, HTML editing, Gene viewer, asset packaging, and site mode |
 | [Maintenance and verification guide](handbook/maintenance.en.md) | Dependency constraints, regression tests, browser checks, and code layout |
 | [Local topic data](content/README.md) | Storing and restoring topic files (Chinese) |
 
@@ -52,7 +54,9 @@ The repository stores the authoring workflow, reusable code, and the public styl
 
 [View the style example online](https://jyx114514.github.io/personal-html-book/example.html), or download [example.html](example.html) from the repository and open it offline.
 
-The example shows the nested outline, formulas, code copying, tables, interactive experiments, native animated diagrams, and paragraph notes. Select body text to try highlights, underlines, and annotations. Notes support bold text, formulas, autosave, and import/export. This page demonstrates styling and interactions; it is not a complete PCR analysis guide.
+The current example and shared implementation are the approved project default. Subsequent textbooks retain this visual system; style changes require an explicit user request. See the [authoring guide](handbook/authoring.en.md) for layout and map parameters and the [maintenance guide](handbook/maintenance.en.md) for acceptance coverage.
+
+The example shows responsive wide-screen content, the nested outline, formulas, code copying, tables, interactive experiments, native animated diagrams and paragraph notes. Its plasmid section uses the 7,760 bp pdisplay-AVPR2-IRES-EGFP sequence and 52 original visible annotations to demonstrate the larger map, callouts, zoom and sequence navigation. Missing annotations are not invented. Select ordinary prose to try highlights, underlines and annotations, with bold text, formulas, autosave and import/export. This page demonstrates styling and interaction; scientific content and original annotations still require review for their intended use.
 
 <!-- readme-section: license -->
 ## License

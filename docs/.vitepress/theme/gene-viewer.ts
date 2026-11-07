@@ -18,6 +18,7 @@ export function mountGeneViewers(root: ParentNode = document) {
         features: Array.from(viewer.querySelectorAll<HTMLElement>('[data-gene-annotation]'), item => ({
           name: item.querySelector('.gene-feature-name')?.textContent,
           start: Number(item.dataset.start), end: Number(item.dataset.end), strand: Number(item.dataset.strand),
+          color: item.dataset.color || undefined,
           description: item.querySelector('.gene-feature-description')?.textContent ?? '',
         })),
       })
@@ -30,6 +31,7 @@ export function mountGeneViewers(root: ParentNode = document) {
     const listen = (target: EventTarget, event: string, handler: EventListener) => target.addEventListener(event, handler, { signal: controller.signal })
     const sequence = gene.sequence
     let view = gene.topology, offset = 0, start = 0, end = 0, anchor = 0, matchIndex = -1
+    let zoom = 100
     let matches: number[] = []
     let copyVersion = 0
     const report = (text: string) => { get('[data-gene-status]').textContent = text }
@@ -97,7 +99,13 @@ export function mountGeneViewers(root: ParentNode = document) {
     listen(viewer, 'click', event => {
       const target = (event.target as Element).closest<HTMLElement>('[data-gene-view], [data-gene-feature], [data-gene-annotation], [data-gene-position], button')
       if (!target || !viewer.contains(target)) return
-      if (target.dataset.geneView) {
+      if (target.dataset.geneZoom) {
+        const fit = target.dataset.geneZoom === 'fit'
+        zoom = fit ? 100 : Math.max(50, Math.min(200, zoom + (target.dataset.geneZoom === 'in' ? 20 : -20)))
+        get('[data-gene-map]').style.setProperty('--gene-map-zoom', String(zoom / 100))
+        get('[data-gene-map]').classList.toggle('gene-map-fit', fit)
+        get('[data-gene-zoom-label]').textContent = fit ? '适合窗口' : `${zoom}%`
+      } else if (target.dataset.geneView) {
         view = target.dataset.geneView
         get('[data-gene-map]').innerHTML = renderGeneMap(gene, view)
         viewer.querySelectorAll<HTMLElement>('[data-gene-view]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.geneView === view)))

@@ -3,6 +3,7 @@ import { test } from 'node:test'
 import { createMarkdownRenderer } from 'vitepress'
 import { courseMarkdown } from './course-markdown.mjs'
 import { normalizeGene, parseDna, reverseComplement, selectedSequence, renderGeneViewer } from '../docs/.vitepress/theme/gene-model.mjs'
+import { planCircularMap } from '../docs/.vitepress/theme/gene-map.mjs'
 
 test('CJK strong emphasis works in prose, lists, tables and HTML panels without changing code or attributes', async () => {
   const md = await createMarkdownRenderer(process.cwd(), { math: true })
@@ -36,4 +37,27 @@ test('gene coordinates, FASTA, circular origin and all IUPAC complements are val
   assert.doesNotMatch(html, /<script>/)
   assert.match(html, /&lt;script&gt;/)
   assert.match(html, /data-gene-raw>ACGTTA/)
+  assert.throws(() => normalizeGene({ ...data, features: [{ name: 'bad color', start: 1, end: 3, color: 'url(remote)' }] }), /color/)
+})
+
+test('detailed maps separate overlapping ranges, preserve circular spans and place dense labels without overlap', () => {
+  const gene = normalizeGene({ name: 'Dense map', sequence: 'A'.repeat(8000), features: [
+    { name: 'wrap', start: 7800, end: 200, color: '#00ff00' },
+    { name: 'overlap', start: 7900, end: 100 },
+    ...Array.from({ length: 55 }, (_, i) => ({ name: `Site ${i}`, start: 1400 + i * 4, end: 1402 + i * 4, strand: 0 })),
+  ] })
+  const plan = planCircularMap(gene)
+  assert.equal(plan.records[0].size, 401)
+  assert.notEqual(plan.records[0].lane, plan.records[1].lane)
+  for (const side of ['left', 'right']) {
+    const labels = plan.records.filter(record => !record.inside && record.side === side).sort((a, b) => a.labelY - b.labelY)
+    for (let i = 1; i < labels.length; i++) assert.ok(labels[i].labelY - labels[i - 1].labelY >= 32)
+    assert.ok(labels.every(label => label.labelY >= 50 && label.labelY <= plan.height - 50))
+  }
+  const first = renderGeneViewer(gene), second = renderGeneViewer(gene)
+  assert.equal([...first.matchAll(/data-gene-map-label=/g)].length, gene.features.length)
+  assert.match(first, /fill="#00ff00"/)
+  assert.doesNotMatch(first, /NaN|Infinity/)
+  const firstIds = new Set([...first.matchAll(/ id="([^"]+)"/g)].map(match => match[1]))
+  assert.ok([...second.matchAll(/ id="([^"]+)"/g)].every(match => !firstIds.has(match[1])), 'Map label references must be unique across instances')
 })

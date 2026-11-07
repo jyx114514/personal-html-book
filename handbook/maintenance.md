@@ -49,7 +49,7 @@ pnpm run verify:html
 | 入口 | 覆盖范围 | 能证明什么 |
 | --- | --- | --- |
 | `verify:static` | 文档同步、类型、全范围 lint、模型自检、导出和网站隔离构建 | 静态检查与构建通过；尚未验证离线可用 |
-| `verify:browser` | 中英文外壳、SVG 与阅读批注夹具，真实断网 `file://`、请求监控、禁用 JS、交互与窄屏 | 导出工作流的浏览器回归通过，不代表任意教材已达标 |
+| `verify:browser` | 中英文外壳、SVG、阅读批注与 Gene 图谱夹具，真实断网 `file://`、请求监控、禁用 JS、交互、宽屏与窄屏 | 导出工作流的浏览器回归通过，不代表任意教材已达标 |
 | `verify` | 以上两层全部必过；缺浏览器即失败 | 工作流完整本地验收通过 |
 | `verify:html` | 本地 `dist/` 中全部当前 HTML 及清单，逐份复制隔离验收 | 报告中列出的当前教材通过自动交付检查；科学内容仍需审阅 |
 
@@ -63,11 +63,13 @@ pnpm run verify:html
 
 截图与结果写入 `internal/native-html-test/`。浏览器验收将当前 HTML 及清单复制到隔离夹具，在副本上验证追加与重新导出，进程中断也不会改动权威文件。临时夹具正常结束时自动清理，截图与报告保留；类型检查或构建成功不能代替实际浏览器验收。
 
-强调与序列模型回归位于 `scripts/course-markdown.test.mjs`，纳入默认静态验收。序列查看器的离线浏览器回归位于 `scripts/browser-genes.test.mjs`，纳入完整验收；覆盖无 JavaScript 阅读、环形起点、注释与双链联动、分页、搜索、坐标校验、键盘选择、复制及失败回退、多实例隔离、正文重新打包保留、明暗模式和 320/390/800/1440 像素宽度。截图、报告与预览位于 `internal/gene-viewer-test/`。正文一致性检查仅排除查看器渐进显示的操作控件，静态图谱、注释、序列和说明仍参与比较。
+强调、序列与图谱模型回归位于 `scripts/course-markdown.test.mjs`，纳入默认静态验收；检查中文强调、FASTA/IUPAC、跨起点坐标、原色校验、重叠特征分轨、密集标签避让及多图谱文字路径 ID 隔离。序列查看器的离线浏览器回归位于 `scripts/browser-genes.test.mjs`，纳入完整验收；覆盖无 JavaScript 阅读、双线骨架及完整标签、原颜色保留、环形起点、注释与双链联动、分页、搜索、坐标校验、键盘选择、复制及失败回退、缩放的实际尺寸变化、适合窗口、多实例隔离、正文重新打包保留、网站换页，以及明暗模式和 320/390/800/1440/1920/2560 像素宽度。截图、报告与预览位于 `internal/gene-viewer-test/`。正文一致性检查仅排除查看器渐进显示的操作控件，静态图谱、注释、序列和说明仍参与比较。
 
 `verify:html` 默认使用项目依赖；兼容命令 `node scripts/verify-native-html.mjs <node_modules路径>` 的可选参数须直接包含 `playwright/`。缺少教材、清单、Playwright 或可用浏览器均以非零退出码停止，不产生验收成功报告。无 JavaScript 上下文同样监控资源请求，避免静态分支遗漏外部资源。
 
 外壳回归使用 `node --test scripts/browser-shell.test.mjs`，已纳入默认 `verify` 的必过项，不会因未设置 `COURSE_PLAYWRIGHT_DIR` 而跳过。它创建中英文隔离夹具，调用实际交付验收器检查离线阅读、无外部请求、禁用 JS、正文保留，并检查目录文案、自定义标签、组件白名单和通量图端点。结果保存在 `internal/test-feedback-browser/`。
+
+宽屏外壳回归在 1280/1440/1920/2560px 下检查正文占用可用宽度、左右边距 24–64px 和无整页横向溢出，并验证打开笔记面板后正文不被遮挡；同时保留 320/390px 的窄屏与中英文明暗模式检查。固定样式的实现来源为 `custom.css`、`outline.css`、`standalone/layout.css`、`standalone/annotations.css` 及 `gene-viewer.css` / `gene-map.mjs`，根目录 `example.html` 提供公开预览。样式修改须同步当前预览并完成交付验收；常规资源刷新原样保留正文及静态图谱。
 
 原生图解浏览器回归使用 `node --test scripts/browser-diagrams.test.mjs`，同样是默认 `verify` 的必过项。它实际构建制作手册中的 SVG 示例，检查断网打开、无 JavaScript 静态图、播放/暂停/继续/重置、键盘操作、多图隔离、减少动态效果、深色模式、320/390 像素窄屏及网站换页后的控件初始化。截图、演示 HTML 与报告保存在 `internal/native-diagram-test/`。常规导出回归同时检查 SVG 原样导入、重新打包保留，以及绘图属性与动画值中的外部资源引用。
 

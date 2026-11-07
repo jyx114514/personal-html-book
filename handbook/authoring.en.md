@@ -39,6 +39,8 @@ The manifest lives at `content/my-topic/manifest.json`; chapters needed for the 
 
 `scripts/build-standalone.mjs` converts Markdown into static semantic HTML at build time, rendering formulas, code highlighting, and experiment initial values, reusing the shared theme and inlining every asset. Runtime JavaScript only enhances the outline, copy buttons, and experiment interaction — it never rebuilds the body. The root [SKILL.md](../SKILL.md) is the sole editable source of authoring conventions. After editing it, run `pnpm run sync:agents` to generate `AGENTS.md` and synchronize `.agents/skills/dialogue-to-course/SKILL.md`; verification rejects drift.
 
+The current `example.html` and shared implementation are the approved default style. New topics retain the existing fonts, colors, wide-screen layout, code toolbar, notes and map styling. Changes to these defaults require an explicit user request. The visual baseline does not restrict textbook subjects, languages or content.
+
 The exporter bundles only allowlisted experiment components identified by `data-course-component` in the current HTML body. Without those experiments, it includes only native outline, copy, and diagram scripts, omitting the Vue experiment runtime. Default asset refresh also rescans the current body, so adding or removing experiments directly in HTML updates their dependencies on re-export while preserving the body.
 
 ```bash
@@ -85,6 +87,12 @@ Markdown imports and site pages share emphasis parsing: CJK punctuation boundari
 ## Gene sequence viewer
 
 The default theme includes a native sequence viewer inspired by the [Addgene Sequence Analyzer](https://www.addgene.org/browse/sequence/260863/). It reuses the warm paper, teal accents, serif headings and dark mode without loading remote assets. Features include circular/linear maps, annotations and strand direction, double-stranded sequence, GC percentage, forward-strand search, coordinate selection, selection copying and reverse-complement copying. Without JavaScript, maps, annotations, the first 600 bp of both strands and an expandable full sequence remain readable.
+
+Circular maps use a SnapGene-style scientific layout: a double backbone, non-overlapping coordinate-based tracks, outlined curved arrows, internal names and outside callouts, and the plasmid name and length in the center. Dense callout labels are separated on each side without dropping annotations. Features may specify `color` (for example, `"#00ff00"`); only six-digit hexadecimal colors are accepted. Otherwise the default map palette is used. The drawing stays on white paper while its surrounding frame follows textbook light/dark mode. Wide screens give the map a larger main column; smaller screens move annotations below. Zoom in/out, fit-to-window and independent horizontal scrolling are supported. Labels and shapes both locate the sequence when clicked. Restriction sites, primers and biological annotations are never copied from a reference screenshot.
+
+`gene-map.mjs`, `gene-viewer.css` and `gene-viewer.ts` maintain the shared map defaults. Above 1699px the map uses the main column with a 240–280px annotation list; smaller viewports place the list below. At 100%, the map is at least 860px wide and scrolls within its frame on narrow screens. Zoom ranges from 50% to 200% in 20-percentage-point steps; fit-to-window fits the whole map into its current frame. Circular coordinate ticks depend on sequence length, overlapping features use separate tracks, and outside labels retain at least 32 drawing units of separation. These shared drawing parameters do not change biological lengths or functions.
+
+A saved HTML map is static SVG. Default repacking preserves it. To adopt the new layout, generate and replace the relevant viewer fragment from the current HTML sequence, coordinates and optional `data-color` attributes before refreshing shared assets; never rebuild the body from historical Markdown. Internal text paths have independent IDs across maps and remain readable without JavaScript.
 
 Use a `gene-viewer` Markdown fence containing JSON:
 
