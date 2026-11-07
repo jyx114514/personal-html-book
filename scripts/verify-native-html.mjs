@@ -31,9 +31,9 @@ const extractBody = html => {
 }
 const normalize = text => text.replace(/\s|\u200b/g, '')
 const readableArticleText = page => page.locator('article').evaluate(article => {
-  // Animation controls are progressively revealed by JS; their labels are UI,
-  // while the diagram, caption and surrounding prose must remain readable.
-  const controls = [...article.querySelectorAll('[data-course-animation-controls]')]
+  // Animation/viewer controls are progressively revealed UI; static diagrams,
+  // sequences, annotations, captions and surrounding prose must remain readable.
+  const controls = [...article.querySelectorAll('[data-course-animation-controls], [data-gene-controls]')]
   const hidden = controls.map(node => node.hidden)
   try {
     controls.forEach(node => { node.hidden = true })

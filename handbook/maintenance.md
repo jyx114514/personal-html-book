@@ -63,6 +63,8 @@ pnpm run verify:html
 
 截图与结果写入 `internal/native-html-test/`。浏览器验收将当前 HTML 及清单复制到隔离夹具，在副本上验证追加与重新导出，进程中断也不会改动权威文件。临时夹具正常结束时自动清理，截图与报告保留；类型检查或构建成功不能代替实际浏览器验收。
 
+强调与序列模型回归位于 `scripts/course-markdown.test.mjs`，纳入默认静态验收。序列查看器的离线浏览器回归位于 `scripts/browser-genes.test.mjs`，纳入完整验收；覆盖无 JavaScript 阅读、环形起点、注释与双链联动、分页、搜索、坐标校验、键盘选择、复制及失败回退、多实例隔离、正文重新打包保留、明暗模式和 320/390/800/1440 像素宽度。截图、报告与预览位于 `internal/gene-viewer-test/`。正文一致性检查仅排除查看器渐进显示的操作控件，静态图谱、注释、序列和说明仍参与比较。
+
 `verify:html` 默认使用项目依赖；兼容命令 `node scripts/verify-native-html.mjs <node_modules路径>` 的可选参数须直接包含 `playwright/`。缺少教材、清单、Playwright 或可用浏览器均以非零退出码停止，不产生验收成功报告。无 JavaScript 上下文同样监控资源请求，避免静态分支遗漏外部资源。
 
 外壳回归使用 `node --test scripts/browser-shell.test.mjs`，已纳入默认 `verify` 的必过项，不会因未设置 `COURSE_PLAYWRIGHT_DIR` 而跳过。它创建中英文隔离夹具，调用实际交付验收器检查离线阅读、无外部请求、禁用 JS、正文保留，并检查目录文案、自定义标签、组件白名单和通量图端点。结果保存在 `internal/test-feedback-browser/`。

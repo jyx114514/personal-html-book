@@ -77,6 +77,31 @@ pnpm run build:standalone my-topic --from-markdown
 
 Markdown 导入采用保守校验：原生 HTML 标签必须小写（例如 `<b>`，不能写 `<B>`），组件须来自白名单；正文中的 `<style>` 块会明确报错，请复用共享样式。代码块中的标签和样式示例不受此限制。每个公式在构建时校验 `data-tex` 注入与静态 SVG 的存在，输出结构不兼容会立即报错。
 
+Markdown 导入及网站模式共用强调解析：`**注意：**后文`、`这是**关键结论。**后文` 等中文标点边界会输出 `<strong>`。HTML 面板（包括 `CoursePanel`）内的文本也支持强调，保留原标签和属性；代码、脚本、SVG 和已渲染公式中的星号不转换。用 `\*\*字面星号\*\*` 或反引号保留语法示例。此修复只作用于 Markdown 渲染，不在默认重新打包时改写已有 HTML 正文。
+
+<!-- readme-section: genes -->
+## Gene 序列查看器
+
+默认主题提供原生序列查看器，交互参考 [Addgene Sequence Analyzer](https://www.addgene.org/browse/sequence/260863/)。使用共享暖白纸面、青绿强调、衬线标题及深色模式，不加载外站资源。支持环形/线性图、功能注释及方向、双链序列、GC 比例、正链搜索、坐标选择、选区复制和反向互补复制。没有 JavaScript 时仍提供图谱、注释、前 600 bp 双链和可展开的完整序列。
+
+在 Markdown 中使用 `gene-viewer` 代码围栏，内容为 JSON：
+
+```gene-viewer
+{
+  "name": "教学序列（合成示意）",
+  "sequence": "ATGCGTACGTAGCTAGCGTACGATCGATCGTACGATCGTACGATCGTACGATCGTACGATCG",
+  "topology": "circular",
+  "features": [
+    { "name": "正向区段", "start": 5, "end": 24, "strand": 1, "description": "仅说明坐标，不代表真实功能。" },
+    { "name": "跨起点区段", "start": 50, "end": 8, "strand": -1 }
+  ]
+}
+```
+
+`sequence` 接受单条 FASTA 或 DNA 字母（ACGT 及 IUPAC 模糊字母），忽略空白，最多 50,000 bp。`features` 可省略，最多 200 条。坐标从 **1** 开始、包含两端，均相对于输入正链；`strand` 为 `1`、`-1` 或 `0`（无方向，不绘制箭头）。仅 `circular` 允许 `start > end`，表示跨越起点；切换图谱视图不会改变实际拓扑。搜索忽略大小写和空白，仅搜索正链，IUPAC 模糊字母按字面匹配；环形序列包含跨起点匹配。双链按每段 600 bp 分页，复制使用完整选区。反向互补按钮明确转换选区，不因注释方向自动切换复制内容；剪贴板失败时显示可手动复制的文本框。
+
+注释名称、坐标、方向和描述均由作者提供，查看器不自动预测基因、ORF、酶切位点，也不读取 SnapGene/GenBank 文件。示例序列及注释只用于说明交互。已有 HTML 可使用共享 `renderGeneViewer`（`docs/.vitepress/theme/gene-model.mjs`）生成原生片段，追加到当前 article 末尾，再默认重新打包以刷新资源。片段直接保存完整正链及注释，运行时读取当前 HTML；不把教材正文隐藏在脚本里。根目录 `example.html` 提供同风格的可打开预览。
+
 <!-- readme-section: diagrams -->
 ## 原生讲解图片
 

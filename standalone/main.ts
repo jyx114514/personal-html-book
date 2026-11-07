@@ -1,5 +1,6 @@
 import { mountOutline } from '../docs/.vitepress/theme/outline'
 import { mountDiagrams } from '../docs/.vitepress/theme/diagrams'
+import { mountGeneViewers } from '../docs/.vitepress/theme/gene-viewer'
 import { mountCopyButtons } from './copy'
 import { mountAnnotations } from './annotations'
 import 'vitepress/dist/client/theme-default/styles/vars.css'
@@ -13,6 +14,7 @@ import '../docs/.vitepress/theme/outline.css'
 export function mountStandalone() {
   mountOutline(document)
   mountDiagrams(document)
+  mountGeneViewers(document)
   mountCopyButtons(document)
   mountAnnotations(document)
 }

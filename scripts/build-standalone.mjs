@@ -7,6 +7,7 @@ import vue from '@vitejs/plugin-vue'
 import { createMarkdownRenderer } from 'vitepress'
 import { assertStandaloneResources } from './standalone-validation.mjs'
 import { renderMathWithTex } from './standalone-math.mjs'
+import { courseMarkdown } from './course-markdown.mjs'
 import { courseUi } from '../docs/.vitepress/theme/course-ui.mjs'
 import { buildOutlineTree, renderOutlineTree, outlineExcludedClasses } from '../docs/.vitepress/theme/outline-model.mjs'
 
@@ -132,6 +133,7 @@ async function importMarkdown(topic, manifest) {
   // VitePress caches the renderer: install extensions once for a multi-topic export.
   if (!renderer) {
     renderer = await createMarkdownRenderer(root, { math: true })
+    renderer.use(courseMarkdown)
     renderer.core.ruler.push('course-no-author-style', state => {
       const hasStyle = tokens => tokens.some(token =>
         (token.type.startsWith('html_') && /<style\b/i.test(token.content)) || (token.children && hasStyle(token.children)))

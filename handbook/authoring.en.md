@@ -77,6 +77,31 @@ When importing multiple chapters from Markdown for the first time, unique headin
 
 Markdown import uses conservative validation: native HTML tags must be lowercase (for example, `<b>` rather than `<B>`), and components must be allowlisted. A `<style>` block in the body causes an explicit error; reuse shared styles. Tag and style examples inside code fences remain allowed. Each formula is checked at build time for `data-tex` injection and a static SVG; incompatible output fails immediately.
 
+Markdown imports and site pages share emphasis parsing: CJK punctuation boundaries such as `**注意：**后文` and `这是**关键结论。**后文` produce `<strong>`. Prose inside HTML panels (including `CoursePanel`) supports emphasis while preserving tags and attributes. Code, scripts, SVG and rendered formulas retain their stars. Use `\*\*literal stars\*\*` or backticks for syntax examples. This applies during Markdown rendering; default repacking never rewrites an existing HTML body.
+
+<!-- readme-section: genes -->
+## Gene sequence viewer
+
+The default theme includes a native sequence viewer inspired by the [Addgene Sequence Analyzer](https://www.addgene.org/browse/sequence/260863/). It reuses the warm paper, teal accents, serif headings and dark mode without loading remote assets. Features include circular/linear maps, annotations and strand direction, double-stranded sequence, GC percentage, forward-strand search, coordinate selection, selection copying and reverse-complement copying. Without JavaScript, maps, annotations, the first 600 bp of both strands and an expandable full sequence remain readable.
+
+Use a `gene-viewer` Markdown fence containing JSON:
+
+```gene-viewer
+{
+  "name": "教学序列（合成示意）",
+  "sequence": "ATGCGTACGTAGCTAGCGTACGATCGATCGTACGATCGTACGATCGTACGATCGTACGATCG",
+  "topology": "circular",
+  "features": [
+    { "name": "正向区段", "start": 5, "end": 24, "strand": 1, "description": "仅说明坐标，不代表真实功能。" },
+    { "name": "跨起点区段", "start": 50, "end": 8, "strand": -1 }
+  ]
+}
+```
+
+`sequence` accepts one FASTA record or DNA letters (ACGT and IUPAC ambiguity letters), ignoring whitespace, up to 50,000 bp. `features` is optional, with at most 200 annotations. Coordinates are **1-based, inclusive**, relative to the input forward strand; `strand` is `1`, `-1`, or `0` (undirected, drawn without an arrow). Only `circular` allows `start > end` to cross the origin. Switching the map view does not change topology. Search ignores case and whitespace, searches the forward strand only, and matches ambiguity letters literally; circular matches may cross the origin. The double-stranded view pages through 600 bp at a time; copying uses the entire selected range. Reverse-complement copying explicitly transforms the selection; annotation direction does not automatically change copied content. Clipboard failure exposes a selected text field for manual copying.
+
+Authors provide annotation names, coordinates, directions and descriptions. The viewer does not predict genes, ORFs or restriction sites, or read SnapGene/GenBank files. Example sequences and annotations illustrate interaction only. For existing HTML, generate a native fragment with the shared `renderGeneViewer` export (`docs/.vitepress/theme/gene-model.mjs`), append it to the current article, then refresh assets through default repacking. The fragment stores the complete forward sequence and annotations directly in HTML, read by the runtime; textbook prose is never hidden in scripts. Open the root `example.html` for a preview with the shared style.
+
 <!-- readme-section: diagrams -->
 ## Native explanatory diagrams
 

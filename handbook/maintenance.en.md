@@ -87,6 +87,8 @@ Standalone clients are built for the experiment component set required by the cu
 
 Git ignore rules only constrain current and future commits; they cannot withdraw already published historical copies. History cleanup requires a private backup and explicit authorization; a local rewrite does not mean remote or cloned copies are cleaned up too.
 
+Emphasis and sequence-model regressions in `scripts/course-markdown.test.mjs` are part of static verification. The mandatory offline browser regression in `scripts/browser-genes.test.mjs` covers reading without JavaScript, circular origin handling, annotation/sequence linking, pagination, search, coordinate validation, keyboard selection, copying and clipboard fallback, isolated instances, body preservation on repack, light/dark mode, and 320/390/800/1440 pixel widths. Screenshots, reports and a preview are stored in `internal/gene-viewer-test/`. Body equality checks exclude only progressively revealed viewer controls; static maps, annotations, sequence and explanations remain part of the comparison.
+
 <!-- readme-section: scope -->
 ## Repository scope
 
