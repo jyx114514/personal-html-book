@@ -105,11 +105,12 @@ test('gene viewer works offline with static fallback, selection, search, clipboa
   assert.equal(await viewer.locator('[data-gene-copy-fallback]').inputValue(), demoGene.sequence.slice(2, 8))
   await viewer.locator('[data-gene-reset]').click()
   await viewer.locator('[data-gene-view="circular"]').click()
-  for (const width of [1440, 800, 390, 320]) {
+  for (const width of [2560, 1920, 1440, 800, 390, 320]) {
     await page.setViewportSize({ width, height: 1050 })
     for (const colorScheme of ['light', 'dark']) {
       await page.emulateMedia({ colorScheme })
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth), false, `${width} ${colorScheme} overflow`)
+      if (width >= 1440) assert.ok((await viewer.locator('[data-gene-map]').boundingBox()).width <= 480, 'Wide screens must not enlarge the plasmid map without a limit')
       await viewer.screenshot({ path: path.join(directory, `${width}-${colorScheme}.png`) })
     }
   }
@@ -148,5 +149,5 @@ test('gene viewer works offline with static fallback, selection, search, clipboa
     assert.equal(await site.locator('[data-gene-start]').inputValue(), '7', 'One click must advance exactly once after navigation')
   }
   assert.deepEqual(errors, [])
-  await writeFile(path.join(directory, 'results.json'), JSON.stringify({ browser: browser.version(), offline: true, noJs: true, widths: [1440, 800, 390, 320], selection: true, circularOrigin: true, clipboardAndFallback: true, bodyPreserved: true, siteNavigation: true, errors }, null, 2))
+  await writeFile(path.join(directory, 'results.json'), JSON.stringify({ browser: browser.version(), offline: true, noJs: true, widths: [2560, 1920, 1440, 800, 390, 320], selection: true, circularOrigin: true, clipboardAndFallback: true, bodyPreserved: true, siteNavigation: true, errors }, null, 2))
 })

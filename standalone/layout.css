@@ -1,7 +1,7 @@
 /* Reusable standalone document layout; course appearance comes from the shared theme. */
 #app { width: 100%; }
 .course-shell { padding-left: 256px; }
-.course-body { max-width: 850px; margin: 0 auto; padding: 64px var(--course-space) 80px; }
+.course-body { width: 100%; min-width: 0; margin: 0; padding: 64px clamp(var(--course-space), 3vw, 64px) 80px; }
 .course-outline-source { display: none; }
 .course-body :is(h2[id], h3[id], h4[id], h5[id], h6[id], span[id]) { scroll-margin-top: 88px; }
 .course-table-scroll:focus-visible { outline: 2px solid var(--vp-c-brand-1); outline-offset: 2px; }

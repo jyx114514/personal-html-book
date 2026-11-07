@@ -207,7 +207,7 @@ test('offline shell locales, custom labels, prototype names, and flux endpoints'
     const copyButton = page.locator('button.copy')
     for (const colorScheme of ['light', 'dark']) {
       await page.emulateMedia({ colorScheme })
-      for (const width of [1280, 390, 320]) {
+      for (const width of [1280, 1440, 1920, 2560, 390, 320]) {
         await page.setViewportSize({ width, height: 844 })
         const toolbar = await copyButton.evaluate(button => {
           const pre = button.parentElement.querySelector('pre')
@@ -226,6 +226,16 @@ test('offline shell locales, custom labels, prototype names, and flux endpoints'
         assert.ok(toolbar.aboveCode, 'Copy toolbar must not cover code')
         assert.ok(toolbar.besideLanguage, 'Language and copy button must not overlap')
         assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
+        if (width >= 1280) {
+          const layout = await page.evaluate(() => {
+            const outline = document.querySelector('.course-outline').getBoundingClientRect()
+            const article = document.querySelector('article').getBoundingClientRect()
+            return { left: article.left - outline.right, right: document.documentElement.clientWidth - article.right, width: article.width, available: document.documentElement.clientWidth - outline.right }
+          })
+          assert.ok(layout.left >= 24 && layout.left <= 64, `Wide-screen left gutter: ${JSON.stringify(layout)}`)
+          assert.ok(layout.right >= 24 && layout.right <= 64, `Wide-screen right gutter: ${JSON.stringify(layout)}`)
+          assert.ok(layout.width > layout.available * .85, 'Wide-screen body must use the available width')
+        }
         await copyButton.evaluate(button => button.classList.add('copied'))
         const feedback = await copyButton.evaluate(button => ({
           label: getComputedStyle(button, '::before').content,
@@ -236,6 +246,11 @@ test('offline shell locales, custom labels, prototype names, and flux endpoints'
         await copyButton.evaluate(button => button.classList.remove('copied'))
       }
     }
+    await page.setViewportSize({ width: 1920, height: 844 })
+    await page.locator('.course-notes-toggle').click()
+    const notesLayout = await page.evaluate(() => ({ article: document.querySelector('article').getBoundingClientRect().right, panel: document.querySelector('.course-notes-panel').getBoundingClientRect().left }))
+    assert.ok(notesLayout.article < notesLayout.panel, 'Expanded body must reserve space for the notes panel')
+    await page.keyboard.press('Escape')
     await page.emulateMedia({ colorScheme: 'light' })
     await page.setViewportSize({ width: 390, height: 844 })
     assert.equal(await page.locator('[data-course-component="constructor"]').innerText(), 'Constructor placeholder')
